@@ -154,7 +154,7 @@ object AutomationBridge {
                 buildJsonObject {
                     put("backend","fga-android-native");put("applicationId",BuildConfig.APPLICATION_ID)
                     put("protocolVersion",1);put("versionName",BuildConfig.VERSION_NAME)
-                    put("upstreamRevision","cfb0593c64aaaceeab3ba56040fa34ab8e32f7ba")
+                    put("upstreamRevision",BuildConfig.AUTOMATION_UPSTREAM_REVISION)
                     put("candidateRevision",BuildConfig.AUTOMATION_SOURCE_REVISION)
                     put("instanceId",instanceId);put("prepared",manager.get()?.isAutomationPrepared==true)
                     put("executorBusy",executorBusy())

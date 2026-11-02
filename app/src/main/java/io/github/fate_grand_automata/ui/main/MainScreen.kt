@@ -256,7 +256,7 @@ private fun MainScreenContent(
             item {
                 Heading(stringResource(R.string.app_name)) {
                     HeadingButton(
-                        text = "Build: ${BuildConfig.VERSION_CODE}",
+                        text = "Build: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
                         onClick = { navigate(MainScreenDestinations.Releases) }
                     )
 

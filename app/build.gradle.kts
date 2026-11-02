@@ -1,3 +1,4 @@
+import java.util.Properties
 import javax.inject.Inject
 
 plugins {
@@ -76,6 +77,18 @@ androidComponents {
     }
 }
 
+val forkVersion = Properties().apply {
+    rootProject.file("fga-version.properties").inputStream().use { load(it) }
+}
+val upstreamVersion = forkVersion.getProperty("upstream.tag").removePrefix("v").toInt()
+val forkPatch = forkVersion.getProperty("patch")
+require(Regex("0x[0-9a-f]{4}").matches(forkPatch)) { "Invalid native patch version: $forkPatch" }
+val forkVersionCode = forkVersion.getProperty("versionCode").toInt()
+require(forkVersionCode.toLong() == upstreamVersion.toLong() * 65536 + forkPatch.removePrefix("0x").toInt(16)) {
+    "versionCode must match the upstream version and native patch in fga-version.properties"
+}
+require(forkVersionCode in 1..2100000000) { "Native versionCode is outside Android's supported release range" }
+
 android {
     compileSdk = 37
 
@@ -98,10 +111,11 @@ android {
         applicationId = "io.github.fate_grand_automata.automation"
         minSdk = 24
         targetSdk = 36
-        versionCode = System.getenv("FGA_VERSION_CODE")?.toInt() ?: 1
-        versionName = System.getenv("FGA_VERSION_NAME") ?: System.getenv("FGA_VERSION_CODE") ?: "0.1.0"
+        versionCode = forkVersionCode
+        versionName = "$upstreamVersion-$forkPatch"
+        buildConfigField("String", "AUTOMATION_UPSTREAM_REVISION", "\"${forkVersion.getProperty("upstream.sha")}\"")
         val sourceRevision = providers.exec {
-            commandLine("git", "describe", "--always", "--dirty", "--abbrev=40")
+            commandLine("git", "describe", "--always", "--dirty", "--abbrev=40", "--exclude=*")
         }.standardOutput.asText.get().trim()
         buildConfigField("String", "AUTOMATION_SOURCE_REVISION", "\"$sourceRevision\"")
     }

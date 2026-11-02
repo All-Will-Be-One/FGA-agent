@@ -9,6 +9,7 @@ build
 /captures
 .externalNativeBuild
 .cxx
+__pycache__/
 custom-game-area/image.jpg
 
 # Play Store deploy credentials - holds a service account private key

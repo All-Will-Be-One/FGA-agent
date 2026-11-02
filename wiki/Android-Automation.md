@@ -1,12 +1,12 @@
 # Local Android automation fork
 
-This candidate reuses native AutoBattle/Battle/Caster/Card execution. Base: official FGA `cfb0593c64aaaceeab3ba56040fa34ab8e32f7ba`. Script mode preserves normal FGA policies. Dynamic mode receives explicit external plans from FGOAgent; all skill timing/target/NP/card strategy stays there. New thin adapters live in scripts/decision; Battle has a small external-route/DI seam. Caster, ServantTracker, Card, AutoBattle and libautomata are byte-identical to officialcfb0593. The full fork retains Phase1 app lifecycle/cleanup integration.
+This candidate reuses native AutoBattle/Battle/Caster/Card execution. Base: official FGA v3068, `af893d495b59010263eda37351a84d4de9193111`; native version `3068-0x0000`. Script mode preserves normal FGA policies. Dynamic mode receives explicit external plans from FGOAgent; all skill timing/target/NP/card strategy stays there. New thin adapters live in scripts/decision; Battle has a small external-route/DI seam. Caster, ServantTracker, Card, AutoBattle and libautomata are byte-identical to official v3068. The full fork retains Phase1 app lifecycle/cleanup integration. See [fork versioning and upstream maintenance](Fork-Upstream-Maintenance.md).
 
 ## Install and configure separately
 
 The fork applicationId is `io.github.fate_grand_automata.automation` (`.test` for debug). It does not replace official FGA or automatically import its private preferences. Use normal FGA UI to import an exported compatible configuration, set party/support/script/card priorities, select the server and prepare accessibility/screen capture. Automation never grants system consent.
 
-FGO-py Smart/Classic are not native FGA features. FGOAgent's separate replaceable policy module reuses the auto rules/data/readonly recognition; Classic remains unsupported. The host execution profile resolves recipient hints to explicit native target clicks; Android makes no default choice. No APK installation, consent or game acceptance has been performed in this development round.
+FGO-py Smart/Classic are not native FGA features. FGOAgent's separate replaceable policy module reuses the auto rules/data/readonly recognition; Classic remains unsupported. The host execution profile resolves recipient hints to explicit native target clicks; Android makes no default choice. Compilation and offline tests do not certify device consent or game acceptance; APK installation is separately authorized.
 
 ## Local high-level interface
 

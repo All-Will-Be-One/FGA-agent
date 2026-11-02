@@ -3,6 +3,7 @@ package io.github.fate_grand_automata.automation
 import io.github.fate_grand_automata.scripts.decision.*
 import io.github.fga.automation.*
 import io.github.lib_automata.Pattern
+import io.github.lib_automata.ScriptAbortException
 import kotlinx.serialization.json.*
 import java.lang.reflect.Proxy
 import java.nio.ByteBuffer
@@ -15,6 +16,32 @@ class ExternalPlanReceiverTest {
         var journal=ExternalJournal()
         override fun load()=journal
         override fun save(journal:ExternalJournal) {this.journal=journal}
+    }
+    private class RunStore:JournalStore {
+        var journal=Journal()
+        override fun load()=journal
+        override fun save(journal:Journal) {this.journal=journal}
+    }
+    private class WaitingTask {
+        val controls=mutableListOf<String>()
+        lateinit var callback:NativeBattleCallback
+        val controller=AutomationController(RunStore(),object:NativeBattleBackend {
+            override fun start(run:RunSnapshot,callback:NativeBattleCallback) {
+                this@WaitingTask.callback=callback
+                callback.state(RunState.Running)
+            }
+            // Deliberately defer the Android main-loop/runner cancellation flag.
+            override fun control(runId:String,op:String) {controls+=op}
+        },now={100L},newId={"run"})
+        val run=controller.start("request","config",RunLimits(1,60),"smart")
+        var owner:String?=run.runId
+        fun stop() {controller.control(run.runId,"stop-request","stop")}
+        fun acceptedStop()=acceptedOwnedSmartStop(controller.status(runId=run.runId),owner,true,true)
+        fun permit() {
+            val current=controller.status(runId=run.runId)
+            if(owner!=run.runId || current.state==RunState.Stopping || current.pendingControl=="stop")
+                throw RpcFailure("ExternalPlanNotPermitted","External plans require this owned running Smart task")
+        }
     }
     /** Synthetic PNG header for transport tests, not a game screenshot or image-recognition fixture. */
     private fun pixels(width:Int=1280,height:Int=720)=byteArrayOf(-119,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82)+
@@ -126,5 +153,118 @@ class ExternalPlanReceiverTest {
             assertEquals(JsonNull,ready["beforeAttackFrame"] ?: JsonNull)
             assertEquals(JsonNull,ready["expiresAtMillis"] ?: JsonNull)
         } finally {dir.deleteRecursively()}
+    }
+    @Test fun acceptedStopBetweenCancellationCheckAndOwnerGuardIsOrdinaryAbort() {
+        val dir=Files.createTempDirectory("fga-stop-race").toFile()
+        try {
+            val task=WaitingTask();val protocol=ExternalPlanProtocol(Store(),{task.permit()});protocol.open("run")
+            val receiver=ExternalPlanReceiver("run",protocol,ExternalFrameStore(dir,"test.automation"),
+                {task.permit()},{task.acceptedStop()})
+            var checks=0;var closed=0
+            assertFailsWith<ScriptAbortException> {
+                receiver.await(NativeDecisionContext(1,1,1,1,NativeDecisionPhase.Skills),{pattern(onClose={closed++})}) {
+                    if(++checks==2) task.stop()
+                }
+            }
+            assertEquals(2,checks);assertEquals(1,closed);assertEquals(listOf("stop"),task.controls)
+            assertEquals(RunState.Stopping,task.controller.status(runId="run").state)
+            assertFalse(task.controller.status(runId="run").quiescent)
+            assertNull(protocol.accepted("run"))
+            task.callback.exit("Abort",0)
+            assertEquals(RunState.Cancelled,task.controller.status(runId="run").state)
+            assertTrue(task.controller.status(runId="run").quiescent)
+        } finally {dir.deleteRecursively()}
+    }
+    @Test fun acceptedStopBetweenOuterGuardAndPublishPermitIsOrdinaryAbort() {
+        val dir=Files.createTempDirectory("fga-publish-stop-race").toFile()
+        try {
+            val task=WaitingTask();val protocol=ExternalPlanProtocol(Store(),{task.permit()});protocol.open("run")
+            val receiver=ExternalPlanReceiver("run",protocol,ExternalFrameStore(dir,"test.automation"),
+                {task.permit()},{task.acceptedStop()})
+            var closed=0
+            assertFailsWith<ScriptAbortException> {
+                receiver.await(NativeDecisionContext(1,1,1,1,NativeDecisionPhase.Skills),{
+                    task.stop();pattern(onClose={closed++})
+                }) {}
+            }
+            assertEquals(1,closed);assertNull(protocol.accepted("run"))
+        } finally {dir.deleteRecursively()}
+    }
+    @Test fun acceptedStopBetweenExecutingGuardAndProtocolPermitNeverMarksExecuting() {
+        val dir=Files.createTempDirectory("fga-executing-stop-race").toFile()
+        try {
+            val task=WaitingTask();val protocol=ExternalPlanProtocol(Store(),{task.permit()});protocol.open("run")
+            var ownerChecks=0
+            val receiver=ExternalPlanReceiver("run",protocol,ExternalFrameStore(dir,"test.automation"),{
+                task.permit()
+                if(++ownerChecks==3) task.stop()
+            },{task.acceptedStop()})
+            var checks=0
+            val command=receiver.await(NativeDecisionContext(1,1,1,1,NativeDecisionPhase.Skills),{pattern()}) {
+                if(++checks==2) {
+                    val ready=protocol.next("run").getValue("ready").jsonObject
+                    protocol.submit(ExternalPlan("run","plan",ready.getValue("battleId").jsonPrimitive.content,
+                        ready.getValue("turnId").jsonPrimitive.content,"skills",ready.getValue("observationId").jsonPrimitive.content,
+                        buildJsonObject {put("type","skills");put("actions",JsonArray(emptyList()))}))
+                }
+            }
+            assertFailsWith<ScriptAbortException> {receiver.executing(command)}
+            assertEquals("Accepted",protocol.status("run","plan").status)
+            assertFalse(task.controller.status(runId="run").quiescent)
+        } finally {dir.deleteRecursively()}
+    }
+    @Test fun sameAcceptedStopStillRejectsExternalRpcPlanSubmission() {
+        val task=WaitingTask();val protocol=ExternalPlanProtocol(Store(),{task.permit()});protocol.open("run")
+        val ready=protocol.publish("run",buildJsonObject {put("battle",1);put("turn",1);put("phase","skills")},buildJsonObject {})
+        task.stop()
+        val error=assertFailsWith<RpcFailure> {
+            protocol.submit(ExternalPlan("run","plan",ready.battleId,ready.turnId,"skills",ready.observationId,
+                buildJsonObject {put("type","skills");put("actions",JsonArray(emptyList()))}))
+        }
+        assertEquals("ExternalPlanNotPermitted",error.code)
+    }
+    @Test fun foreignOrUncertainOwnershipIsNeverClassifiedAsAcceptedStop() {
+        val task=WaitingTask();task.stop();val run=task.controller.status(runId="run")
+        assertTrue(acceptedOwnedSmartStop(run,"run",true,true))
+        assertFalse(acceptedOwnedSmartStop(run,"another-run",true,true))
+        assertFalse(acceptedOwnedSmartStop(run,"run",false,true))
+        assertFalse(acceptedOwnedSmartStop(run,"run",true,false))
+        assertFalse(acceptedOwnedSmartStop(run.copy(decisionMode="script"),"run",true,true))
+        assertFalse(acceptedOwnedSmartStop(run.copy(quiescent=true),"run",true,true))
+        assertFalse(acceptedOwnedSmartStop(run.copy(reconciliationRequired=true),"run",true,true))
+        assertFalse(acceptedOwnedSmartStop(run.copy(pendingControl="pause"),"run",true,true))
+        assertFalse(acceptedOwnedSmartStop(run.copy(state=RunState.Running),"run",true,true))
+        val dir=Files.createTempDirectory("fga-foreign-stop").toFile()
+        try {
+            task.owner="another-run"
+            val failure=RpcFailure("ExternalPlanNotPermitted","foreign owner")
+            val receiver=ExternalPlanReceiver("run",ExternalPlanProtocol(Store(),{}),ExternalFrameStore(dir,"test.automation"),
+                {throw failure},{task.acceptedStop()})
+            assertSame(failure,assertFailsWith<RpcFailure> {
+                receiver.await(NativeDecisionContext(1,1,1,1,NativeDecisionPhase.Skills),{error("must not capture")}) {}
+            })
+        } finally {dir.deleteRecursively()}
+    }
+    @Test fun acceptedStopDoesNotHidePersistenceOrUnrelatedNativeFailure() {
+        val dir=Files.createTempDirectory("fga-real-failure").toFile()
+        try {
+            for(failure in listOf(RpcFailure("IdentityPersistenceFailed","disk failure"),IllegalStateException("native failure"))) {
+                val receiver=ExternalPlanReceiver("run",ExternalPlanProtocol(Store(),{}),ExternalFrameStore(dir,"test.automation"),
+                    {throw failure},{true})
+                assertSame(failure,assertFails {
+                    receiver.await(NativeDecisionContext(1,1,1,1,NativeDecisionPhase.Skills),{error("must not capture")}) {}
+                })
+            }
+        } finally {dir.deleteRecursively()}
+    }
+    @Test fun deadlineStopKeepsControllerDeadlineOutcomeAfterNativeAbort() {
+        val task=WaitingTask();task.controller.expire("run")
+        assertTrue(task.acceptedStop())
+        task.callback.exit("Abort",0)
+        val result=task.controller.status(runId="run")
+        assertEquals(RunState.Failed,result.state)
+        assertEquals("DeadlineExceeded",result.terminalReason)
+        assertEquals(0,result.completedRuns)
+        assertTrue(result.quiescent)
     }
 }

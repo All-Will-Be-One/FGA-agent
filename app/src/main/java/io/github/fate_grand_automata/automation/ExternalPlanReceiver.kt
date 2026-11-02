@@ -2,34 +2,58 @@ package io.github.fate_grand_automata.automation
 
 import io.github.fate_grand_automata.scripts.decision.*
 import io.github.fga.automation.ExternalPlanProtocol
+import io.github.fga.automation.RpcFailure
+import io.github.fga.automation.RunSnapshot
+import io.github.fga.automation.RunState
 import io.github.lib_automata.Pattern
+import io.github.lib_automata.ScriptAbortException
 import kotlinx.serialization.json.*
+
+/** The same still-owned task accepted stop, before the runner cancellation flag arrives. */
+internal fun acceptedOwnedSmartStop(run:RunSnapshot,owner:String?,smartRequest:Boolean,runnerPresent:Boolean):Boolean =
+    run.runId==owner && run.decisionMode=="smart" && smartRequest && runnerPresent &&
+        !run.quiescent && !run.reconciliationRequired && run.state==RunState.Stopping && run.pendingControl=="stop"
 
 /** Receives explicit FGOAgent actions. No skill, target, NP or card policy lives here. */
 class ExternalPlanReceiver(
     private val runId:String,private val protocol:ExternalPlanProtocol,private val frames:ExternalFrameStore,
     private val requireOwner:()->Unit,
+    private val acceptedStop:()->Boolean={false},
 ) : NativeBattleDecisionProvider {
     override val enabled=true
     private var pending:String?=null
     private fun capture(capture:()->Pattern)=capture().use { frames.save(runId,it) }
+    private fun nativeFailure(error:RpcFailure):Nothing {
+        // RPC guards still reject stopped tasks. Only this native caller can
+        // classify its own accepted stop as the ordinary script cancellation.
+        if(error.code=="ExternalPlanNotPermitted" && acceptedStop()) throw ScriptAbortException()
+        throw error
+    }
     override fun await(context:NativeDecisionContext,capture:()->Pattern,checkCancelled:()->Unit):NativeDecisionCommand {
-        requireOwner();checkCancelled()
-        val ready=protocol.publish(runId,contextJson(context),capture(capture))
-        while(true) {
-            checkCancelled();requireOwner()
-            val receipt=protocol.accepted(runId)
-            if(receipt!=null) {
-                check(receipt.observationId==ready.observationId) { "Accepted plan belongs to another native observation" }
-                pending=receipt.planId
-                return NativeDecisionCommand(receipt.planId,action(receipt.action))
+        try {
+            requireOwner();checkCancelled()
+            val ready=protocol.publish(runId,contextJson(context),capture(capture))
+            while(true) {
+                checkCancelled();requireOwner()
+                val receipt=protocol.accepted(runId)
+                if(receipt!=null) {
+                    check(receipt.observationId==ready.observationId) { "Accepted plan belongs to another native observation" }
+                    pending=receipt.planId
+                    return NativeDecisionCommand(receipt.planId,action(receipt.action))
+                }
+                Thread.sleep(50)
             }
-            Thread.sleep(50)
+        } catch(error:RpcFailure) {
+            nativeFailure(error)
         }
     }
     override fun executing(command:NativeDecisionCommand) {
-        requireOwner();check(command.planId==pending)
-        protocol.executing(runId,command.planId)
+        try {
+            requireOwner();check(command.planId==pending)
+            protocol.executing(runId,command.planId)
+        } catch(error:RpcFailure) {
+            nativeFailure(error)
+        }
     }
     override fun completed(command:NativeDecisionCommand) { protocol.completed(runId,command.planId);pending=null }
     override fun failed(command:NativeDecisionCommand,error:String) { protocol.failed(runId,command.planId,error);pending=null }

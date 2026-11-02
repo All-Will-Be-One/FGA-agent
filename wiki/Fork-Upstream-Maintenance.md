@@ -42,6 +42,12 @@ Do not bump for checks or builds. Bump once when preparing a new native release
 on the same upstream baseline. The properties file is the shared version source;
 commit it with the release's source changes.
 
+## Local 0x0001 cancellation candidate
+
+The 3068-0x0001 candidate increments Android versionCode to 201064449. It is a local candidate, not published, installed or live-accepted. The external-plan Receiver classifies only `ExternalPlanNotPermitted` during its wait/execute boundary as ordinary ScriptAbort when the same still-owned Smart task has already accepted stop, remains nonquiescent and does not require reconciliation. The original RPC permission guard is unchanged; foreign ownership, unknown control state, persistence failures and unrelated exceptions are not relabelled as cancellation. This adds no action, polling loop or retry.
+
+Deterministic fake-controller tests cover the interval before the runner's cancellation flag is delivered, including inner publish/executing permission checks. Factory guard/open startup windows outside the Receiver are not included. A clean candidate commit and inspected APK version/source/package/signature remain separate from any future installation, host deployment or game acceptance.
+
 ## Check and integrate
 
 `check` uses the existing authenticated `gh` CLI for read-only official Release

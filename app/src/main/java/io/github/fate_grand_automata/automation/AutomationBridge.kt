@@ -205,7 +205,10 @@ object AutomationBridge {
         permitExternalPlan(id)
         val protocol=externalPlans ?: error("External-plan journal unavailable")
         protocol.open(id)
-        return ExternalPlanReceiver(id,protocol,requireNotNull(frames)) { permitExternalPlan(id) }
+        return ExternalPlanReceiver(id,protocol,requireNotNull(frames),requireOwner={ permitExternalPlan(id) },acceptedStop={
+            val run=controller?.status(runId=id)
+            run!=null && acceptedOwnedSmartStop(run,owner,activeRequest?.decisionMode=="smart",activeRunner!=null)
+        })
     }
     private fun externalRequest(op:String,q:JsonObject):JsonObject {
         val protocol=externalPlans ?: throw RpcFailure("JournalUnavailable","External-plan journal unavailable")

@@ -17,11 +17,15 @@ native patch and Android versionCode. Gradle reads this record for every variant
 the inherited `FGA_VERSION_NAME`/`FGA_VERSION_CODE` CI environment variables no
 longer override the native fork's identity.
 
-The visible name is `3070-0x0000`, with four lowercase hexadecimal patch digits.
-Each native release on the same upstream baseline increments the patch, including
-the `0x0009` to `0x000a` transition. A newer upstream baseline resets it to
-`0x0000`; a retry of the same Release never resets it. Git release tags may use
-the prefix `v`, for example `v3070-0x0000`.
+The visible name is `3070-0x0001`, with four lowercase hexadecimal patch digits.
+The upstream version and native patch are independent: an upstream-only upgrade
+preserves the native patch. Increment the patch only for our own changes,
+including the `0x0009` to `0x000a` transition. A retry changes neither counter.
+Git release tags may use the prefix `v`, for example `v3070-0x0001`.
+
+The v3070 integration initially reset the existing patch by mistake. Its corrected
+record restores `0x0001` from the prior native baseline; this correction does not
+increment it again to `0x0002`.
 
 Android `versionCode = upstream_number * 65536 + patch` increases across both
 patches and upstream upgrades. The counter never wraps; out-of-range releases
@@ -38,8 +42,8 @@ python3 tools/fga_release.py bump-patch
 python3 -m unittest discover -s tools/tests -v
 ```
 
-Do not bump for checks or builds. Bump once when preparing a new native release
-on the same upstream baseline. The properties file is the shared version source;
+Do not bump for checks, builds or upstream-only upgrades. Bump once when preparing
+a release with our own changes. The properties file is the shared version source;
 commit it with the release's source changes.
 
 ## Local 0x0001 cancellation candidate

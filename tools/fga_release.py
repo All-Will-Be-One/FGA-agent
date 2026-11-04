@@ -79,10 +79,10 @@ class Version:
 
     def advance(self, release):
         if release == self.release:
-            return self  # Retry does not reset an already incremented native patch.
+            return self  # A retry changes neither independent version counter.
         if release.number <= self.release.number:
             raise ValueError("Upstream release must advance; changed identity needs manual review")
-        return Version(release, 0)
+        return Version(release, self.patch)
 
 
 def read_version(repo):

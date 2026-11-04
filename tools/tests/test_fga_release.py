@@ -22,11 +22,15 @@ class VersionTests(unittest.TestCase):
         self.assertEqual(version.name, "3068-0x000a")
         self.assertEqual(version.code, 201064458)
 
-    def test_new_upstream_resets_patch_and_increases_code(self):
-        previous = Version(OLD, 0xffff)
-        current = previous.advance(NEW)
-        self.assertEqual((current.name, current.code), ("3068-0x0000", 201064448))
-        self.assertGreater(current.code, previous.code)
+    def test_new_upstream_preserves_native_patch_and_increases_code(self):
+        for patch in (1, 0x12, 0xffff):
+            with self.subTest(patch=patch):
+                previous = Version(OLD, patch)
+                current = previous.advance(NEW)
+                self.assertEqual(current.name, f"3068-0x{patch:04x}")
+                self.assertEqual(current.patch, patch)
+                self.assertEqual(current.code - previous.code, (NEW.number - OLD.number) * 65536)
+                self.assertGreater(current.code, previous.code)
 
     def test_same_release_retry_preserves_patch(self):
         current = Version(NEW, 0x12)
@@ -73,6 +77,24 @@ class VersionTests(unittest.TestCase):
 
 
 class StateTests(unittest.TestCase):
+    def test_bump_patch_cli_advances_only_native_counter(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp)
+            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+            subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.com",
+                            "commit", "-qm", "initial", "--allow-empty"], cwd=repo, check=True)
+            release = Release(2, "v3068", release_tool.run(repo, "git", "rev-parse", "HEAD"))
+            previous = Version(release, 9)
+            release_tool.write_version(repo, previous)
+            output = subprocess.check_output([sys.executable, str(SPEC.origin), "--repo", str(repo),
+                                              "bump-patch"], text=True)
+            current = release_tool.read_version(repo)
+            self.assertEqual(current.release, release)
+            self.assertEqual(current.patch, 10)
+            self.assertEqual(current.code, previous.code + 1)
+            self.assertEqual(json.loads(output)["versionName"], "3068-0x000a")
+            self.assertEqual(release_tool.read_state(repo)["releases"][release.key]["status"], "candidate")
+
     def test_failed_validation_is_retried_even_when_version_was_prepared(self):
         state = {"releases": {NEW.key: {"status": "failed", "candidate_commit": "head"}}}
         self.assertEqual(release_tool.classify(Version(OLD, 1), NEW, state), "retry_required")

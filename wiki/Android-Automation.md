@@ -1,6 +1,6 @@
 # Local Android automation fork
 
-This candidate reuses native AutoBattle/Battle/Caster/Card execution. Base: official FGA v3070, `59f736321ee504641af47e674938bf8beb623506`; native version `3070-0x0001`. Script mode preserves normal FGA policies. Dynamic mode receives explicit external plans from FGOAgent; all skill timing/target/NP/card strategy stays there. New thin adapters live in scripts/decision; Battle has a small external-route/DI seam. Caster, ServantTracker, Card, AutoBattle and libautomata are byte-identical to official v3070. The full fork retains Phase1 app lifecycle/cleanup integration. See [fork versioning and upstream maintenance](Fork-Upstream-Maintenance.md).
+This candidate reuses native AutoBattle/Battle/Caster/Card execution. Base: official FGA v3071, `eb7a04d678784a972c3b0f258b69e9b8355a5290`; native version `3071-0x0001`. Script mode preserves normal FGA policies. Dynamic mode receives explicit external plans from FGOAgent; all skill timing/target/NP/card strategy stays there. New thin adapters live in scripts/decision; Battle has a small external-route/DI seam. Caster, ServantTracker, Card, AutoBattle and libautomata are byte-identical to official v3071. The full fork retains Phase1 app lifecycle/cleanup integration. See [fork versioning and upstream maintenance](Fork-Upstream-Maintenance.md).
 
 ## Install and configure separately
 

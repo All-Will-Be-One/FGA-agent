@@ -17,11 +17,11 @@ native patch and Android versionCode. Gradle reads this record for every variant
 the inherited `FGA_VERSION_NAME`/`FGA_VERSION_CODE` CI environment variables no
 longer override the native fork's identity.
 
-The visible name is `3074-0x0001`, with four lowercase hexadecimal patch digits.
+The visible name is `3081-0x0001`, with four lowercase hexadecimal patch digits.
 The upstream version and native patch are independent: an upstream-only upgrade
 preserves the native patch. Increment the patch only for our own changes,
 including the `0x0009` to `0x000a` transition. A retry changes neither counter.
-Git release tags may use the prefix `v`, for example `v3074-0x0001`.
+Git release tags may use the prefix `v`, for example `v3081-0x0001`.
 
 The v3070 integration initially reset the existing patch by mistake. Its corrected
 record restores `0x0001` from the prior native baseline; this correction does not

@@ -3,6 +3,7 @@ package io.github.fate_grand_automata.runner
 import io.github.fate_grand_automata.di.script.PreferencesModule
 import io.github.fate_grand_automata.scripts.prefs.*
 import io.github.fate_grand_automata.scripts.decision.*
+import io.github.fate_grand_automata.scripts.models.ServantPriorityPerWave
 import java.lang.reflect.Proxy
 import kotlin.test.*
 
@@ -19,7 +20,7 @@ class SmartPreferenceProvidersTest {
         assertTrue(module.provideSkillCommand(config, preferences).stages.flatten().flatten().isEmpty())
         module.provideSpamConfig(config, preferences)
         assertTrue(module.provideCardPriority(config, preferences).isNotEmpty())
-        assertNull(module.provideServantPriority(config, preferences))
+        assertSame(ServantPriorityPerWave.default, module.provideServantPriority(config, preferences))
         assertFailsWith<IllegalStateException> { module.provideSkillCommand(config, ScriptRunPreferences(unreadable<IPreferences>())) }
     }
 }

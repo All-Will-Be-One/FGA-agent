@@ -53,6 +53,6 @@ class PreferencesModule {
 
     @ScriptScope
     @Provides
-    fun provideServantPriority(battleConfig: IBattleConfig, preferences: ScriptRunPreferences): ServantPriorityPerWave? =
-        if (!preferences.decisionProvider.enabled && battleConfig.useServantPriority) battleConfig.servantPriority else null
+    fun provideServantPriority(battleConfig: IBattleConfig, preferences: ScriptRunPreferences): ServantPriorityPerWave =
+        if (preferences.decisionProvider.enabled) ServantPriorityPerWave.default else battleConfig.servantPriority
 }

@@ -287,6 +287,10 @@ private fun BattleConfigContent(
 
                             HorizontalDivider()
 
+                            OwnPartyLineupPreference(config)
+
+                            HorizontalDivider()
+
                             val cardPriority by vm.cardPriority.collectAsState(null)
 
                             cardPriority?.let {

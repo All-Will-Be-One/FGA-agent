@@ -635,4 +635,12 @@ If your FGO version isn't recognized or runs inside an app cloner, select your s
     <string name="support_catalog_retry">Retry</string>
     <string name="support_catalog_empty">No matching servants</string>
     <string name="support_catalog_error">Could not load the catalog or portraits. Try again.</string>
+    <string name="own_party_title">Own party lineup</string>
+    <string name="own_party_hint">Record your own Servants by position. Leave the support position unassigned. This does not edit the party in FGO.</string>
+    <string name="own_party_choose">Choose your Servant</string>
+    <string name="own_party_select">Select</string>
+    <string name="own_party_front_slot">Front %1$d</string>
+    <string name="own_party_back_slot">Back %1$d</string>
+    <string name="own_party_unset">Unassigned</string>
+    <string name="own_party_save">Save</string>
 </resources>

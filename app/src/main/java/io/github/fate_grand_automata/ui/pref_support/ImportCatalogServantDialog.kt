@@ -37,6 +37,24 @@ import timber.log.Timber
 @Composable
 internal fun ImportCatalogServantDialog(onDismiss: () -> Unit, onImported: (String) -> Unit) {
     val store = SupportServantStore.inApp(LocalContext.current.filesDir)
+    SelectCatalogServantDialog(
+        title = R.string.support_catalog_import,
+        confirmLabel = R.string.support_catalog_add,
+        onDismiss = onDismiss,
+        prepare = { SupportPortraitImporter.import(it, store) },
+        onSelected = { onImported(it.key) }
+    )
+}
+
+@Composable
+internal fun SelectCatalogServantDialog(
+    title: Int,
+    confirmLabel: Int,
+    onDismiss: () -> Unit,
+    disabledIds: Set<Int> = emptySet(),
+    prepare: (suspend (CatalogServant) -> Unit)? = null,
+    onSelected: (CatalogServant) -> Unit
+) {
     val region = SupportServantStore.region(LocalConfiguration.current.locales[0])
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf("") }
@@ -66,7 +84,7 @@ internal fun ImportCatalogServantDialog(onDismiss: () -> Unit, onImported: (Stri
     }
     AlertDialog(
         onDismissRequest = { if (!importing) onDismiss() },
-        title = { Text(stringResource(R.string.support_catalog_import)) },
+        title = { Text(stringResource(title)) },
         text = {
             Column {
                 if (loading || importing) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -84,7 +102,7 @@ internal fun ImportCatalogServantDialog(onDismiss: () -> Unit, onImported: (Stri
                     LazyColumn(Modifier.heightIn(max = 280.dp)) {
                         items(matches, key = { it.id }) { servant ->
                             TextButton(
-                                enabled = !importing,
+                                enabled = !importing && servant.id !in disabledIds,
                                 onClick = { selected = servant },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
@@ -106,12 +124,17 @@ internal fun ImportCatalogServantDialog(onDismiss: () -> Unit, onImported: (Stri
                     enabled = !importing && selected != null,
                     onClick = {
                         val servant = selected ?: return@TextButton
+                        if (servant.id in disabledIds) return@TextButton
+                        if (prepare == null) {
+                            onSelected(servant)
+                            return@TextButton
+                        }
                         importing = true
                         error = false
                         scope.launch {
                             try {
-                                withContext(Dispatchers.IO) { SupportPortraitImporter.import(servant, store) }
-                                onImported(servant.key)
+                                withContext(Dispatchers.IO) { prepare(servant) }
+                                onSelected(servant)
                             } catch (e: Exception) {
                                 if (e is CancellationException) throw e
                                 Timber.w(e, "Support servant portrait import failed")
@@ -121,7 +144,7 @@ internal fun ImportCatalogServantDialog(onDismiss: () -> Unit, onImported: (Stri
                             }
                         }
                     }
-                ) { Text(stringResource(R.string.support_catalog_add)) }
+                ) { Text(stringResource(confirmLabel)) }
             }
         },
         dismissButton = {

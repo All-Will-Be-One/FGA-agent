@@ -162,6 +162,21 @@ class BattleConfigCore(
     )
 
     val party = maker.stringAsInt("autoskill_party", -1)
+
+    // A per-config snapshot of our members, separate from the game's preset number and support filters.
+    val ownPartyLineup = maker.serialized(
+        "own_party_lineup_v1",
+        serializer = object : Serializer<OwnPartyLineup> {
+            override fun deserialize(serialized: String): OwnPartyLineup = try {
+                spamJson.decodeFromString<OwnPartyLineup>(serialized)
+            } catch (_: IllegalArgumentException) {
+                OwnPartyLineup()
+            }
+
+            override fun serialize(value: OwnPartyLineup): String = spamJson.encodeToString(value)
+        },
+        default = OwnPartyLineup()
+    )
     val materials = maker.stringSet("battle_config_mat").map(
         defaultValue = emptySet(),
         convert = {

@@ -633,4 +633,12 @@
     <string name="support_catalog_retry">重试</string>
     <string name="support_catalog_empty">没有匹配的从者</string>
     <string name="support_catalog_error">无法加载从者图鉴或头像，请重试。</string>
+    <string name="own_party_title">我方编队</string>
+    <string name="own_party_hint">按位置记录自己的从者，助战所在位置留空。此设置不会修改游戏内编队。</string>
+    <string name="own_party_choose">选择我方从者</string>
+    <string name="own_party_select">选用</string>
+    <string name="own_party_front_slot">前排 %1$d 号位</string>
+    <string name="own_party_back_slot">后排 %1$d 号位</string>
+    <string name="own_party_unset">未配置</string>
+    <string name="own_party_save">保存</string>
 </resources>

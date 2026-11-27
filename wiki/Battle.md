@@ -104,6 +104,18 @@ Pick one of the 15 party slots. Before each quest, FGA switches to that party if
 
 ![Battle Configs - Party Selection](img/battle/party-selection.jpeg "Battle Configs - Party Selection")
 
+### Own party lineup
+
+In the battle configuration, **Own party lineup** records your own Servants in
+positions 1–3 (front) and 4–6 (back). Leave the position occupied by the quest's support
+unassigned; set which support to borrow separately under **Support Selection**.
+Search the same catalog by a name or number. The lineup saves the unique Atlas
+ID in each position, with local names for display, without downloading support images.
+
+The existing numbered **Party** setting still selects an in-game preset.
+The lineup is a record in the battle configuration; it does not verify, reorder
+or replace Servants in FGO. Changes are saved only when you tap **Save**.
+
 ## Raid
 
 **Raid Turn Delay** waits an extra 1 to 10 seconds at the start of every turn, for raid battles.

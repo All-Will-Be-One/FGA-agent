@@ -45,11 +45,20 @@ internal object ServantCatalog {
     private const val ATLAS = "https://api.atlasacademy.io"
     private const val CHALDEA = "https://raw.githubusercontent.com/chaldea-center/chaldea-data/main/mappings/svt_names.json"
 
+    // Opening one picker per team position should not redownload the same public index.
+    private var cached: List<CatalogServant>? = null
+    private var expiresAtNanos = 0L
+
+    @Synchronized
     fun fetch(): List<CatalogServant> {
+        cached?.takeIf { System.nanoTime() - expiresAtNanos < 0L }?.let { return it }
         val jp = getRequired("$ATLAS/export/JP/basic_servant.json")
         val cn = optional { getRequired("$ATLAS/export/CN/basic_servant.json") }
         val translated = optional { getRequired(CHALDEA) }
-        return parse(jp, cn, translated)
+        return parse(jp, cn, translated).also {
+            cached = it
+            expiresAtNanos = System.nanoTime() + java.util.concurrent.TimeUnit.MINUTES.toNanos(10)
+        }
     }
 
     fun parse(jp: String, cn: String?, translations: String?): List<CatalogServant> {

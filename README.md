@@ -6,7 +6,11 @@
 
 Auto-battle app for FGO (Android 7 or later, no need for root on phones).
 
-Download from our [website](https://fate-grand-automata.github.io)
+This fork's native Android integration is maintained on `fgoagent/main`. See the
+[Agent guide for party XV and borrowed supports](wiki/Android-Automation.md#jp-party-formation)
+and the [branch and upstream release guide](wiki/Fork-Upstream-Maintenance.md).
+
+Download official FGA from the [upstream website](https://fate-grand-automata.github.io).
 
 This is a **Kotlin** port of [FGO-Lua][FGOLua] as an Android app with UI for configuration and without a time-limit on use.  
 It doesn't tamper with the game in anyway and works by looking at the screen and tapping things just like a normal user would do.  

@@ -1,6 +1,13 @@
 # Local Android automation fork
 
-This candidate reuses native AutoBattle/Battle/Caster/Card execution. Base: official FGA v3081, `dca48a0d88edee162ab2d1527d5e662c8f6ac0ca`; native version `3081-0x0001`. Script mode preserves normal FGA policies. Dynamic mode receives explicit external plans from FGOAgent; all skill timing/target/NP/card strategy stays there. New thin adapters live in scripts/decision; Battle has a small external-route/DI seam. Caster, ServantTracker, Card, AutoBattle and libautomata are byte-identical to official v3081. The full fork retains Phase1 app lifecycle/cleanup integration. See [fork versioning and upstream maintenance](Fork-Upstream-Maintenance.md).
+The native Android fork reads the game screen, selects supports and operates
+the party and battle screens. Script mode runs a saved FGA command. In smart
+mode, FGOAgent supplies the skill, target, NP and card decisions. Quest
+strategy and simulation belong to the external host.
+
+For the upstream release and native patch recorded in this checkout, run
+`python3 tools/fga_release.py show` from the repository root. See the
+[branch and upstream release guide](Fork-Upstream-Maintenance.md).
 
 ## Install and configure separately
 
@@ -48,7 +55,10 @@ No effect/scene/known-owner/hand equality proof or observation TTL gates native 
 
 ## Build and update
 
-JDK21, pinned Gradle9.8.2/Kotlin2.4.10/AGP9.4.0, compileSdk37 and build-tools36.0.0. Pure protocol tests: `./gradlew -p automation test`. Upstream native tests: `./gradlew :scripts:test`. Android: `./gradlew :app:testCiUnitTest :app:assembleDebug`. Unit/compile success does not mean live acceptance.
+Use JDK 21 and the repository's Gradle wrapper. Run the protocol tests with
+`./gradlew -p automation test`, the native script tests with `./gradlew :scripts:test`,
+and the Android unit tests with `./gradlew :app:testCiUnitTest`. The debug build
+task is `./gradlew :app:assembleDebug`.
 
 For upstream merges, review the small Battle route and app runner/DI/platform seams; keep new protocol/adapters separate. Compare confirmation/target/NP warning and cleanup contracts, rerun JVM/native/policy replay tests, APK compile and the same acceptance matrix. Do not copy or rewrite native execution to resolve a merge conflict. No publication/production switch is included. Preserve the separate application/configuration and known baseline for rollback.
 
@@ -71,38 +81,63 @@ New start and plan identities/Executing transitions are durable before input. Or
 
 Known configured stops (CE, materials, first-clear, run ceiling, manual support/inventory) retain their reason and count. They are NeedsAttention when the requested target is unmet; only actual native counts or the explicit AP condition can fulfill the target. Unexpected errors remain failures. No additional screen, skill-effect, per-card acceptance or animation timer is introduced.
 
-### Calculated JP formation (reserve XV)
+<a id="calculated-jp-formation-reserve-xv"></a>
 
-If `calculatedPartyVersion` is 1, `party.apply` takes a versioned calculated
-formation and a replay-checked, fixed NP script in `action`. The target is
-always XV, currently on the JP Party Formation screen. It is independent of
-`party.rebuild` (which still uses an existing reference preset). Exact public
-catalog IDs are used for owned servants and Craft Essences; the CE picker checks
-the event filter before the normal list. A normal CE request can use a max-limit-
-broken copy when needed, not vice versa.
+## JP party formation
 
-Poll `party.status` with the same `requestId` until the job is quiescent. A
-successful receipt includes the saved configuration ID, native script SHA-256 and
-`readyToStart: false`. This action never starts a quest or changes the Mystic
-Code. A failed edit can leave an unsaved XV draft; inspect the game before
-retrying. Never blindly repeat a lost/ambiguous request after process restart.
+Battle confirmation reserves XV (15) for Agent launches in both script and
+smart mode. The separate formation editor supports the JP 20:9 full-screen
+layout. Open Party Formation on **XV** with capture and accessibility prepared
+and the runner idle. The editor can replace the contents of XV.
 
-### Strict support Append Skills (JP XV)
+| Operation | What it prepares |
+| --- | --- |
+| `party.rebuild` (`partyRebuildVersion=1`) | Reads `action.referencePreset` (1–14) and reproduces its owned lineup, equipment and support position on XV. The reference preset is read-only. |
+| `party.apply` (`calculatedPartyVersion=1`) | Takes a JP XV formation and fixed battle script supplied by the host. Owned Servants and CEs use Atlas IDs. The editor reserves a front-row slot for the borrowed Servant and imports its portrait if missing. |
 
-When `supportAppendMaxVersion=1`, calculated `party.apply` accepts optional
-`action.supportAppendMax`: ascending, unique, one-based indices from 1 to 5.
-Each listed slot must be **Lv.10**; absence leaves behavior unchanged.
-The quiescent successful receipt echoes the installed list. It is bound to the
-calculated config ID, not the native script hash. The regular skill and
-equipment filters still apply. Only eligible visible candidates are inspected
-in the game's Append view; the normal display and same row must be reacquired
-before selection. The configured refresh budget is a hard limit; no first-row
-or unchecked fallback. Start a guarded config on the support list (or allow
-FGA to open it from the quest list), not from an already-started battle. A
-guarded configuration only guarantees the stated Lv.10 slots, not arbitrary
-minimum levels, exact borrowed CE, or other unconfigured support stats.
+For an owned CE the editor searches **Event Bonus**, then **ALL**, for a copy
+with the requested limit-break state. If neither list yields an ordinary copy,
+the editor searches again and accepts a max-limit-broken (MLB) copy of the same
+CE. An MLB request accepts only MLB. After selection the editor restores the
+previous filter. It checks equipped CEs again when it reopens the saved XV.
 
-The JP bridge also advertises `supportAppendUnlockedVersion=1`.
-`action.supportAppendUnlocked` requires Lv.1 or higher in the listed slots
-using a visible lit icon; it is echoed in the receipt. It cannot overlap
-`supportAppendMax`. It does not recognize arbitrary numeric thresholds.
+The borrowed Servant is selected later on the support screen. In `party.apply`,
+`support.servantId` takes the [unique Atlas servant ID](Support-Image-Maker.md#import-a-preferred-servant-by-name)
+and `support.ce` must be null. Ordinary battle configs can use
+[preferred CE images and the MLB option](Support-Selection.md#craft-essences).
+
+Poll `party.status` with the same `requestId`. A completed `party.apply` reports
+`quiescent: true`, the saved `configId`, `scriptSha256` and `readyToStart: false`.
+Quest start is a separate operation and the Mystic Code stays as equipped.
+If the job fails or its status is lost, inspect XV before retrying. An interrupted
+edit may have already changed the preset.
+
+## Strict support Append Skills (JP XV)
+
+Use these optional fields in the `action` of a JP `party.apply` request.
+Each array lists slots 1–5 in ascending order, with no duplicates or overlap.
+
+| Field | What FGA checks on the borrowed support |
+| --- | --- |
+| `supportAppendUnlocked` (`supportAppendUnlockedVersion=1`) | A lit icon in each listed slot confirms it is unlocked (Lv.1 or higher). |
+| `supportAppendMax` (`supportAppendMaxVersion=1`) | The Lv.10 marker must be visible in each listed slot. |
+
+For example, `"supportAppendUnlocked": [2]` and `"supportAppendMax": [5]`
+together require slot 2 unlocked and slot 5 at Lv.10. Exact or minimum levels
+from 2 through 9, such as “slot 2 at least Lv.6”, cannot be expressed. The
+completed receipt echoes nonempty lists. Changing the requirements changes the
+config ID even if the script hash stays the same.
+
+**Both lists empty or omitted.** FGA skips the Append view and uses the normal
+selection and fallback settings. A generated config uses the requested Servant,
+**Friends Only**, all three regular skills at Lv.10 and **Manual** fallback.
+
+**Either list nonempty.** Start on the support list or let FGA open it from the
+quest list. FGA uses **Preferred** and inspects only fully visible rows that
+pass the ordinary filters. It checks the same candidate in Append view, returns
+to normal view and matches the row again before tapping. A clipped, changed or
+nonmatching row is skipped. An unrecognized display stops the run. If the refresh
+budget is exhausted, FGA stops with `SupportRequirementsUnmet` without using
+First or Manual fallback. Each battle needs its own verified
+support, including on repeat runs. Entering an ongoing battle without that
+verification also stops the run.

@@ -42,15 +42,20 @@ FGA/
 ## Import a preferred Servant by name
 
 In the battle configuration, open **Preferred Support → Import from servant catalog**.
-Search by name or number, select the Servant, and tap **Import and select**. Names come from
-Chaldea and Atlas Academy. Face images come from Atlas Academy. The list's collection number
-is for reference; the saved entry uses the unique Atlas servant ID. Ascension and costume
-portraits belong to that same entry. Reimporting updates the pictures for that same ID.
+Search by localized name, alias, Atlas servant ID or collection number. The results
+show the localized name, class and `#` collection number, so you can distinguish
+Servants who share a name. Select the right row and tap **Import and select**.
 
-Only the import dialog uses the network. Matching uses local templates, and existing Support
-Image Maker templates are not changed. Catalog portraits are stored in the app, not in the
-manual support image directory. After moving a config to another phone, reimport its catalog
-Servants there before use. Use the Image Maker if a regional or special portrait does not match.
+The saved key is `atlas:svt:<id>`. For example, collection number `284` maps to
+`atlas:svt:504500`. Atlas Academy supplies the JP catalog and portraits. CN names
+are matched by ID, and Chaldea supplies additional names and aliases. Changing the
+display language or reimporting ascension and costume portraits keeps the same key.
+
+Catalog lookup and portrait import use the network. Matching on the support screen
+uses local templates. FGA reads catalog portraits from app storage and Image Maker
+files from your manual support directory. After moving a config to another phone,
+reimport its catalog Servants there before use. Use the Image Maker if a regional
+or special portrait does not match.
 
 ## Creating images
 

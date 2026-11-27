@@ -41,6 +41,8 @@ FGA recognizes Servants, CEs and friends by images in your storage folder. The a
 ### Servants
 
 Select one or more Servants in **Preferred Servants**. Any of them is accepted.
+You can also [import a Servant by name or Atlas ID](Support-Image-Maker.md#import-a-preferred-servant-by-name)
+to use its ascension and costume portraits in this list.
 
 ![Servants](img/support-selection/servants.png)
 
@@ -64,8 +66,10 @@ For event CEs, using the in-game CE filter is easier than creating CE images.
 
 ### Friends
 
-Turn on **Friends Only** to only accept supports of the friends selected in **Friend names**.
-FGA can't read Servant levels, NP levels or Append skills, so this is how you make sure you get a strong enough support.
+**Friends Only** checks the row for a Friend, Guest or Follow marker. If you also
+select **Friend names**, the name image must match one of your selections. This
+can help you target a known support when you need a particular Servant or NP level.
+For JP Agent configurations, see the [two supported Append Skill checks](Android-Automation.md#strict-support-append-skills-jp-xv).
 
 Friend name images are created with the [Support Image Maker](Support-Image-Maker). Until you have some, the list is empty:
 
@@ -89,7 +93,8 @@ To pick only Grand supports, select at least one Servant and turn on **Grand Ser
   - **Default effects:** the Bond CE uses its default effect.
   - **NP charge:** the Bond CE is set to NP charge.
 
-Both options need at least one preferred CE. Without one, FGA doesn't check the CEs at all.
+Both options need at least one preferred CE. With none selected, Preferred mode
+still skips a row that shows the blank CE marker.
 
 The [Support Image Maker](Support-Image-Maker) also works on Grand supports. It saves the CEs in the free and bonus-up slots.
 
@@ -97,4 +102,6 @@ The [Support Image Maker](Support-Image-Maker) also works on Grand supports. It 
 
 If no matching support is on screen, FGA scrolls through the list and refreshes it. How often is set in [Fine-tune](Fine-tune#support): **Swipes per Update** and **Max Updates**.
 
-Once Max Updates is reached, FGA uses the **Fallback** mode: **First** or **Manual** (default).
+When the ordinary search returns no match, FGA uses the configured **Fallback**
+mode, **First** or **Manual** (default). With a strict JP Append Skill requirement,
+**Max Updates** is a hard limit. FGA stops if no verified candidate is found.

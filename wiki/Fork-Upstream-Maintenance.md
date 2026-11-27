@@ -1,11 +1,20 @@
 # Native automation fork maintenance
 
-The official repository is `Fate-Grand-Automata/FGA`. Its primary branch is
-`master`; the native automation fork is maintained on
-`All-Will-Be-One/FGA-agent:fgoagent/main`. The fork's inherited `master` and
-separate `desktop` branches are not the native integration target.
+| Repository and branch | Role |
+| --- | --- |
+| `All-Will-Be-One/FGA-agent` · `fgoagent/main` | Integration branch for the native Android fork. Use its remote tip as the maintenance baseline. |
+| `All-Will-Be-One/FGA-agent` · `feature/agent-reserved-party` | Feature branch for the reserved-party work. A push here updates this branch only. |
+| `All-Will-Be-One/FGA-agent` · `master` | Inherited GitHub default branch. Its CI contains the Play Store release job. |
+| `All-Will-Be-One/FGA-agent` · `desktop` | Separate desktop development line. |
+| `Fate-Grand-Automata/FGA` · `master` | Official upstream. The fork integrates published stable release tags from this line. |
 
-Only published stable Releases from the official primary branch are candidates.
+From a checkout whose `origin` is the native fork, inspect GitHub's default branch
+and the live tips even if the clone fetches only one branch:
+
+```bash
+git ls-remote --symref origin HEAD refs/heads/fgoagent/main refs/heads/feature/agent-reserved-party refs/heads/master
+```
+
 Merge the resolved release tag's fixed commit, rather than unreleased branch
 changes. The sole daily monitor is configured separately; this repository adds
 no cron job, webhook, or scheduled workflow.
@@ -17,7 +26,9 @@ native patch and Android versionCode. Gradle reads this record for every variant
 the inherited `FGA_VERSION_NAME`/`FGA_VERSION_CODE` CI environment variables no
 longer override the native fork's identity.
 
-The visible name is `3081-0x0001`, with four lowercase hexadecimal patch digits.
+The visible name combines the upstream version with four lowercase hexadecimal
+patch digits (for example, `3081-0x0002`). Read the current value with
+`python3 tools/fga_release.py show`.
 The upstream version and native patch are independent: an upstream-only upgrade
 preserves the native patch. Increment the patch only for our own changes,
 including the `0x0009` to `0x000a` transition. A retry changes neither counter.

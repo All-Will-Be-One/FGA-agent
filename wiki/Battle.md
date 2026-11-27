@@ -100,9 +100,14 @@ The config list also gets one tab per server.
 
 ## Party
 
-Pick a manual preset from 1–14. **Default** keeps the currently selected manual preset.
-The last preset (15) is reserved for native Agent calls. The Agent does not tap other
-presets as a fallback and stops before launching if it cannot verify preset 15.
+For an ordinary battle config, choose preset 1–14 or **Default** to keep the current
+preset. At quest confirmation, FGA stops if an old config requests XV (15) or if
+**Default** detects XV as the current preset.
+
+Native Agent runs use XV in both script and smart mode. At quest confirmation the
+Agent reads the active preset, selects XV if needed and checks it again. If the
+marker is missing or ambiguous, the run stops before starting the quest. Starting
+at the repeat prompt also requires the run to have verified XV already.
 
 ![Battle Configs - Party Selection](img/battle/party-selection.jpeg "Battle Configs - Party Selection")
 
@@ -114,14 +119,15 @@ unassigned; set which support to borrow separately under **Support Selection**.
 Search the same catalog by a name or number. The lineup saves the unique Atlas
 ID in each position, with local names for display, without downloading support images.
 
-Per owned Servant, a Craft Essence plan can keep the current item, unequip it, or name a
-specific Atlas Craft Essence by ID. Event equipment plans prefer the in-game Event Bonus
-filter, followed by exact item confirmation. This is separate from borrowed support equipment.
+For each owned Servant, you can keep the current Craft Essence, request its removal,
+or specify an Atlas CE ID and whether it must be max-limit broken. Tap **Save** to
+store the plan in the battle config. If an Agent battle reaches confirmation with
+a nonempty lineup plan, it stops and requests the party editor. With an empty plan,
+confirmation checks the preset number only.
 
-The numbered **Party** setting still selects a manual in-game preset. The Agent uses
-preset 15 but does not yet edit or verify the roster or equipment in the game. With a
-nonempty lineup plan, it stops at confirmation instead of launching with an old team.
-Configuration edits are saved only when you tap **Save**.
+To prepare the in-game roster and equipment, the fork has a separate
+[JP party editor](Android-Automation.md#jp-party-formation). It can rebuild XV
+from a reference preset or apply a supplied formation before battle.
 
 ## Raid
 

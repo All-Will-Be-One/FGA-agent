@@ -419,11 +419,32 @@ class NativePartyEditor @Inject constructor(
                     } == true
                 }.use { it.support()!! }
                 if (currentSupport != support) {
-                    report("moving support position ${currentSupport + 1} to ${support + 1}")
-                    gestures.dragFormationCard(position(centers[currentSupport], 183), position(centers[support], 183))
-                    await("XV support moved to position ${support + 1}") {
-                        arrangement() && party() == 15 && support() == support
-                    }.close()
+                    // The arrangement page can render before it starts accepting drags.
+                    // Retry only after confirming the support is still at its original
+                    // position and that the destination remains empty in reserved XV.
+                    Thread.sleep(1050)
+                    var moved = false
+                    for (attempt in 1..3) {
+                        frame().use {
+                            if (it.arrangement() && it.party() == 15 && it.support() == support) {
+                                moved = true
+                            }
+                        }
+                        if (moved) break
+                        await("stable empty XV support source and destination") {
+                            arrangement() && party() == 15 && support() == currentSupport && emptySlot(support)
+                        }.close()
+                        report("moving support position ${currentSupport + 1} to ${support + 1}, attempt $attempt")
+                        checkTime()
+                        gestures.dragFormationCard(position(centers[currentSupport], 183), position(centers[support], 183))
+                        val accepted = awaitOrNull(8) { arrangement() && party() == 15 && support() == support }
+                        if (accepted != null) {
+                            accepted.close()
+                            moved = true
+                            break
+                        }
+                    }
+                    if (!moved) fail("Could not move support to position ${support + 1}")
                 }
                 report("leaving XV's arrangement mode")
                 tap(985, 441)

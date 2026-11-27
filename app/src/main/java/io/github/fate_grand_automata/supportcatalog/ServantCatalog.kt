@@ -108,7 +108,23 @@ internal object ServantCatalog {
     private data class NiceServant(val id: Int, val extraAssets: ExtraAssets)
 
     @Serializable
-    private data class ExtraAssets(val faces: Map<String, Map<String, String>>)
+    private data class ExtraAssets(
+        val faces: Map<String, Map<String, String>>,
+        val equipFace: Map<String, Map<String, String>> = emptyMap()
+    )
+
+    fun equipFaces(id: Int): Pair<ByteArray, ByteArray> {
+        require(id > 0)
+        val result = catalogJson.decodeFromString<NiceServant>(getRequired("$ATLAS/nice/JP/equip/$id"))
+        require(result.id == id)
+        val url = result.extraAssets.faces["equip"]?.get(id.toString())
+            ?: throw IOException("No catalog face for CE $id")
+        val wide = result.extraAssets.equipFace["equip"]?.get(id.toString())
+            ?: throw IOException("No catalog banner for CE $id")
+        require(wide.matches(Regex("https://static\\.atlasacademy\\.io/JP/EquipFaces/[A-Za-z0-9_@.-]+\\.png")))
+        return (face(url) ?: throw IOException("Craft Essence face unavailable")) to
+            (fetchBytes(wide, 1024 * 1024) ?: throw IOException("Craft Essence banner unavailable"))
+    }
 
     fun parseFaceUrls(id: Int, body: String): List<String> {
         val result = catalogJson.decodeFromString<NiceServant>(body)

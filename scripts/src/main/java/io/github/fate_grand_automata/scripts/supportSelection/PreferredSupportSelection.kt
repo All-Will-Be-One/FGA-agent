@@ -3,6 +3,7 @@ package io.github.fate_grand_automata.scripts.supportSelection
 import io.github.fate_grand_automata.scripts.IFgoAutomataApi
 import io.github.fate_grand_automata.scripts.Images
 import io.github.fate_grand_automata.scripts.entrypoints.AutoBattle
+import io.github.fate_grand_automata.scripts.enums.GameServer
 import io.github.fate_grand_automata.scripts.prefs.ISupportPreferences
 import io.github.lib_automata.Region
 import io.github.lib_automata.dagger.ScriptScope
@@ -16,11 +17,14 @@ class PreferredSupportSelection @Inject constructor(
     private val friendChecker: SupportFriendChecker,
     private val servantSelection: ServantSelection,
     private val ceSelection: CESelection,
-    private val friendSelection: FriendSelection
+    private val friendSelection: FriendSelection,
+    private val appendVerification: SupportAppendVerification
 ) : SupportSelectionProvider, IFgoAutomataApi by api {
     private val servants = supportPrefs.preferredServants
     private val ces = supportPrefs.preferredCEs
     private val friendNames = supportPrefs.friendNames
+    private val appendSlots = supportPrefs.appendMaxSlots.toSet()
+    private val unlockedSlots = supportPrefs.appendUnlockedSlots.toSet()
 
     private data class ScrollBarState(
         val topScrollbar: Boolean = false,
@@ -39,6 +43,8 @@ class PreferredSupportSelection @Inject constructor(
             throw AutoBattle.BattleExitException(AutoBattle.ExitReason.SupportSelectionPreferredNotSet)
         }
 
+        if (appendSlots.isNotEmpty() || unlockedSlots.isNotEmpty()) return selectWithAppendRequirements()
+
         return useSameSnapIn {
             if (supportPrefs.friendsOnly && !friendChecker.isFriend()) {
                 // no friends on screen, so there's no point in scrolling anymore
@@ -56,6 +62,24 @@ class PreferredSupportSelection @Inject constructor(
                 scrollBarState.resultWhenNoMatch()
             }
         }
+    }
+
+    private fun selectWithAppendRequirements(): SupportSelectionResult {
+        // Only JP has measured mode labels and row geometry in this port.
+        if (prefs.gameServer !is GameServer.Jp || servants.isEmpty())
+            throw AutoBattle.BattleExitException(AutoBattle.ExitReason.SupportVerificationRequired)
+
+        appendVerification.ensureNormal()
+        val rows = useSameSnapIn {
+            if (supportPrefs.friendsOnly && !friendChecker.isFriend()) null else boundsFinder.all()
+        } ?: return SupportSelectionResult.Refresh
+
+        for (row in rows) {
+            val verified = appendVerification.check(row, appendSlots, unlockedSlots, ::isMatch) ?: continue
+            verified.click()
+            return SupportSelectionResult.Done
+        }
+        return useSameSnapIn { readScrollBarState().resultWhenNoMatch() }
     }
 
     private fun readScrollBarState(): ScrollBarState {

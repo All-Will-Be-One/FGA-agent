@@ -31,9 +31,10 @@ class AutomationControllerTest {
             })
         fun call(body: String) = Json.parseToJsonElement(rpc.request(body)).jsonObject.getValue("ok").jsonPrimitive.boolean
         assertTrue(call("""{"protocolVersion":1,"op":"party.rebuild","requestId":"test","action":{"referencePreset":4}}"""))
+        assertTrue(call("""{"protocolVersion":1,"op":"party.apply","requestId":"calculated","action":{}}"""))
         assertTrue(call("""{"protocolVersion":1,"op":"party.status","requestId":"test"}"""))
         assertFalse(call("""{"protocolVersion":1,"op":"party.rebuild","requestId":"test","targetPreset":1}"""))
-        assertEquals(listOf("party.rebuild", "party.status"), ops)
+        assertEquals(listOf("party.rebuild", "party.apply", "party.status"), ops)
         assertTrue(backend.starts.isEmpty())
         assertTrue(backend.controls.isEmpty())
     }

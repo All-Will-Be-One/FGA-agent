@@ -1,6 +1,7 @@
 package io.github.fate_grand_automata.scripts.modules
 
 import io.github.fate_grand_automata.scripts.enums.SupportSelectionModeEnum
+import io.github.fate_grand_automata.scripts.entrypoints.AutoBattle
 import io.github.fate_grand_automata.scripts.prefs.ISupportPreferences
 import io.github.fate_grand_automata.scripts.supportSelection.ManualSupportSelection
 import io.github.lib_automata.dagger.ScriptScope
@@ -16,10 +17,15 @@ class Support @Inject constructor(
         const val supportRegionToolSimilarity = 0.75
     }
 
-    fun selectSupport(selectionMode: SupportSelectionModeEnum = supportPrefs.selectionMode) {
-        val provider = decider.decide(selectionMode)
+    val requiresVerifiedAppend = supportPrefs.appendMaxSlots.isNotEmpty() || supportPrefs.appendUnlockedSlots.isNotEmpty()
 
-        if (!loop.select(provider)) {
+    fun selectSupport(selectionMode: SupportSelectionModeEnum = supportPrefs.selectionMode) {
+        val mode = if (requiresVerifiedAppend) SupportSelectionModeEnum.Preferred else selectionMode
+        val provider = decider.decide(mode)
+
+        if (!loop.select(provider, strictRefreshLimit = requiresVerifiedAppend)) {
+            if (requiresVerifiedAppend)
+                throw AutoBattle.BattleExitException(AutoBattle.ExitReason.SupportRequirementsUnmet)
             val fallback = decider.decide(supportPrefs.fallbackTo)
 
             if (!loop.select(fallback)) {

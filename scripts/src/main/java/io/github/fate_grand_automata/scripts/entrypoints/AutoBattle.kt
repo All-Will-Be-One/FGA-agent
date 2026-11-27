@@ -69,6 +69,9 @@ class AutoBattle @Inject constructor(
         class LimitRuns(val count: Int) : ExitReason()
         data object SupportSelectionManual : ExitReason()
         data object SupportSelectionPreferredNotSet : ExitReason()
+        data object SupportRequirementsUnmet : ExitReason()
+        data object SupportSkillDisplayUnverified : ExitReason()
+        data object SupportVerificationRequired : ExitReason()
         class SkillCommandParseError(cause: Exception) : ExitReason(cause)
         class CardPriorityParseError(val msg: String) : ExitReason()
         data object Paused : ExitReason()
@@ -84,6 +87,7 @@ class AutoBattle @Inject constructor(
     class ExitException(val reason: ExitReason, val state: ExitState) : Exception(reason.cause)
 
     private var isContinuing = false
+    private var verifiedSupportForBattle = false
 
     // for tracking whether the story skip button could be visible in the current screen
     private var storySkipPossible = true
@@ -180,6 +184,8 @@ class AutoBattle @Inject constructor(
         val screens: Map<() -> Boolean, () -> Unit> = mapOf(
             { connectionRetry.needsToRetry() } to { connectionRetry.retry() },
             { battle.isIdle() } to {
+                if (support.requiresVerifiedAppend && !verifiedSupportForBattle)
+                    throw BattleExitException(ExitReason.SupportVerificationRequired)
                 storySkipPossible = false
                 isInBattle = true
                 battle.performBattle()
@@ -229,6 +235,7 @@ class AutoBattle @Inject constructor(
      * Resets the battle state, clicks on the quest and refills the AP if needed.
      */
     private fun menu() {
+        verifiedSupportForBattle = false
         // In case the repeat loop breaks and we end up in menu (like withdrawing from quests)
         isContinuing = false
 
@@ -372,6 +379,7 @@ class AutoBattle @Inject constructor(
 
     private fun repeatQuest() {
         partySelection.requirePartyForRepeat()
+        verifiedSupportForBattle = false
         // Needed to show we don't need to enter the "StartQuest" function
         isContinuing = true
         storySkipPossible = false
@@ -435,7 +443,9 @@ class AutoBattle @Inject constructor(
     private fun support() {
         canScreenshotBondCE = false
 
+        verifiedSupportForBattle = false
         support.selectSupport()
+        verifiedSupportForBattle = true
 
         if (!isContinuing) {
             4.seconds.wait()

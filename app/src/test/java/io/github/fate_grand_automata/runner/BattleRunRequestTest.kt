@@ -44,6 +44,7 @@ class BattleRunRequestTest {
         var withdraw = false
         var configsPresent = true
         var forbidLegacy = false
+        var appendSlots = emptySet<String>()
         var partyPlan = emptyList<AgentPartyMemberPlan>()
         val writes = mutableListOf<String>()
         val serverPrefs = ServerPrefs(GameServer.Jp.Original)
@@ -53,6 +54,13 @@ class BattleRunRequestTest {
         val config: IBattleConfig = proxy { name, _ ->
             when (name) {
                 "getId" -> "existing"
+                "getSupport" -> proxy<io.github.fate_grand_automata.scripts.prefs.ISupportPreferences> { field, _ ->
+                    when (field) {
+                        "getAppendMaxSlots" -> appendSlots
+                        "getAppendUnlockedSlots" -> emptySet<String>()
+                        else -> error("Unexpected support call: $field")
+                    }
+                }
                 "getOwnPartyPlan" -> partyPlan
                 "getServer" -> configServer
                 "getSkillCommand" -> { check(!forbidLegacy) { "Unused legacy getter accessed" }; command }
@@ -86,10 +94,13 @@ class BattleRunRequestTest {
     @Test
     fun `native Agent freezes its own reserved slot and pending plan`() {
         val f = Fixture()
+        f.appendSlots = setOf("2", "5")
         f.partyPlan = listOf(AgentPartyMemberPlan(1, 504500, AgentEquipmentAction.Equip, 9400010))
         val validated = f.handler.validate(f.request(), BattleRunPolicy.Automation)
         val fixed = ScriptRunPreferences.automation(f.prefs, validated).prefs.selectedBattleConfig
         f.partyPlan = emptyList()
+        f.appendSlots = emptySet()
+        assertEquals(setOf("2", "5"), fixed.support.appendMaxSlots)
         assertEquals(14, fixed.party)
         assertTrue(fixed.agentManagesParty)
         assertEquals(9400010, fixed.ownPartyPlan.single().craftEssenceId)

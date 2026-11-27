@@ -1,6 +1,10 @@
 package io.github.fate_grand_automata.automation
 
 import android.content.Context
+import io.github.fate_grand_automata.supportcatalog.ServantCatalog
+import io.github.fate_grand_automata.supportcatalog.SupportPortraitImporter
+import io.github.fate_grand_automata.supportcatalog.SupportServantStore
+import kotlinx.coroutines.runBlocking
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -34,29 +38,69 @@ object AutomationBridge {
     private var frames:ExternalFrameStore?=null
     private var initializationFailure:String?=null
     @Volatile private var partyJob: PartyJob? = null
-    private data class PartyJob(val requestId: String, val reference: Int,
+    private data class PartyJob(
+        val requestId: String, val reference: Int?, val plan: CalculatedParty?,
+        val instance: String,
         @Volatile var state: String = "Running", @Volatile var step: String = "Starting",
-        @Volatile var error: String? = null)
-    private fun partyRequest(op: String, q: JsonObject): JsonObject {
+        @Volatile var error: String? = null, @Volatile var errorCode: String? = null
+    )
+
+    private fun partyRequest(context: Context, prefs: IPreferences, op: String, q: JsonObject): JsonObject {
         val id = q["requestId"]?.jsonPrimitive?.contentOrNull
             ?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,80}")) }
             ?: throw RpcFailure("InvalidRequest", "A bounded requestId is required")
-        if (op == "party.rebuild") {
-            val reference = q["action"]?.jsonObject?.takeIf { it.keys == setOf("referencePreset") }
-                ?.get("referencePreset")?.jsonPrimitive?.intOrNull?.takeIf { it in 1..14 }
-                ?: throw RpcFailure("InvalidRequest", "referencePreset must be a read-only preset from 1 to 14")
+        val allowed = setOf("protocolVersion", "op", "requestId") +
+            if (op == "party.status") emptySet() else setOf("action")
+        require(q.keys == allowed) { "Unexpected Party Editor request fields" }
+        if (op != "party.status") {
+            val action = q.getValue("action")
+            val reference = if (op == "party.rebuild") {
+                action.jsonObject.takeIf { it.keys == setOf("referencePreset") }
+                    ?.get("referencePreset")?.jsonPrimitive?.intOrNull?.takeIf { it in 1..14 }
+                    ?: throw RpcFailure("InvalidRequest", "referencePreset must be a read-only preset from 1 to 14")
+            } else null
+            val plan = if (op == "party.apply") CalculatedParty.read(action) else null
             val previous = partyJob
-            if (previous?.requestId == id && previous.reference != reference)
-                throw RpcFailure("RequestConflict", "Same requestId, different reference preset")
+            if (previous?.requestId == id && (previous.reference != reference || previous.plan != plan))
+                throw RpcFailure("RequestConflict", "Same requestId, different formation or script")
             if (previous?.requestId != id) {
                 if (executorBusy() || previous?.state == "Running")
                     throw RpcFailure("Busy", "Native runner is occupied")
                 val runner = manager.get() ?: throw RpcFailure("RequiresUserConsent", "Prepare FGA native capture first")
-                val job = PartyJob(id, reference)
+                val job = PartyJob(id, reference, plan, instanceId)
                 partyJob = job
                 try {
-                    runner.launchPartyEditor(reference, { job.step = it }) { error ->
+                    runner.launchPartyEditor({ editor, canContinue ->
+                        val progress: (String) -> Unit = { job.step = it }
+                        if (reference != null) editor.rebuild(reference, canContinue, progress)
+                        else {
+                            val recipe = requireNotNull(plan)
+                            progress("preflight: prepare exact friend servant image")
+                            val store = SupportServantStore.inApp(context.filesDir)
+                            if (store.read(recipe.support.servantId).isEmpty()) {
+                                val catalog = ServantCatalog.fetch().singleOrNull { it.id == recipe.support.servantId }
+                                    ?: throw RpcFailure("SupportUnavailable", "Friend servant ID is missing from the JP catalog")
+                                runBlocking { SupportPortraitImporter.import(catalog, store) }
+                            }
+                            fun conflictCheck() {
+                                val found = prefs.battleConfigs.firstOrNull { it.id == recipe.configId }
+                                if (found != null && !recipeConfigMatches(found.export(), recipe))
+                                    throw RpcFailure("ConfigurationConflict", "Generated config was modified; will not overwrite")
+                            }
+                            conflictCheck()
+                            editor.apply(recipe.formation, canContinue, progress)
+                            // Write the native config only after observing the saved in-game roster.
+                            progress("installing native FGA skill command")
+                            check(canContinue()) { "Party Editor no longer owns the runner" }
+                            conflictCheck()
+                            val config = prefs.battleConfigs.firstOrNull { it.id == recipe.configId }
+                                ?: prefs.addBattleConfig(recipe.configId).also { it.import(recipeConfigValues(recipe)) }
+                            check(recipeConfigMatches(config.export(), recipe)) { "Native script read-back disagreed" }
+                            progress("verified saved XV and installed matching native script; no battle started")
+                        }
+                    }) { error ->
                         job.error = error?.message
+                        job.errorCode = (error as? RpcFailure)?.code
                         job.state = if (error == null) "Completed" else "Failed"
                     }
                 } catch (e: Exception) {
@@ -67,11 +111,49 @@ object AutomationBridge {
         }
         val job = partyJob?.takeIf { it.requestId == id } ?: throw RpcFailure("NotFound", "Unknown party job")
         return buildJsonObject {
-            put("requestId", job.requestId); put("referencePreset",job.reference); put("targetPreset",15)
-            put("state",job.state); put("step",job.step)
-            job.error?.let { put("error",it) }
+            put("requestId", job.requestId)
+            job.reference?.let { put("referencePreset", it) }
+            put("targetPreset", 15); put("instanceId", job.instance)
+            put("state", job.state); put("step", job.step)
+            put("quiescent", job.state != "Running")
+            job.error?.let { put("error", it) }
+            job.errorCode?.let { put("errorCode", it) }
+            job.plan?.let { put("actionSha256", it.actionSha256) }
+            if (job.state == "Completed") job.plan?.let {
+                put("configId", it.configId); put("scriptSha256", it.scriptSha256)
+                put("readyToStart", false)
+                if (it.supportAppendMax.isNotEmpty())
+                    put("supportAppendMax", JsonArray(it.supportAppendMax.map(::JsonPrimitive)))
+                if (it.supportAppendUnlocked.isNotEmpty())
+                    put("supportAppendUnlocked", JsonArray(it.supportAppendUnlocked.map(::JsonPrimitive)))
+            }
         }
     }
+
+    private fun recipeConfigValues(plan: CalculatedParty): Map<String, Any> = mapOf(
+        "autoskill_name" to plan.configName,
+        "autoskill_cmd" to plan.skillCommand,
+        "autoskill_party" to "14",
+        "battle_config_server" to "Jp",
+        "auto_choose_target" to false,
+        "auto_skill_rearrange_cards" to "F",
+        "support_mode" to "Preferred",
+        "support_fallback" to "Manual",
+        "support_friends_only" to true,
+        "support_skill_max_1" to true,
+        "support_skill_max_2" to true,
+        "support_skill_max_3" to true,
+        "support_pref_servant_list" to setOf("atlas:svt:${plan.support.servantId}")
+    ) + (if (plan.supportAppendMax.isNotEmpty())
+        mapOf("agent_support_append_max_slots" to plan.supportAppendMax.map(Int::toString).toSet())
+    else emptyMap()) + (if (plan.supportAppendUnlocked.isNotEmpty())
+        mapOf("agent_support_append_unlocked_slots" to plan.supportAppendUnlocked.map(Int::toString).toSet())
+    else emptyMap())
+
+    private fun recipeConfigMatches(values: Map<String, *>, plan: CalculatedParty) =
+        recipeConfigValues(plan).all { (k, v) -> values[k] == v } &&
+            (plan.supportAppendMax.isNotEmpty() || (values["agent_support_append_max_slots"] as? Set<*>).isNullOrEmpty()) &&
+            (plan.supportAppendUnlocked.isNotEmpty() || (values["agent_support_append_unlocked_slots"] as? Set<*>).isNullOrEmpty())
 
     @Synchronized fun attach(value:ScriptManager) { manager=WeakReference(value) }
     @Synchronized fun executorBusy():Boolean = ProcessScriptRunGate.gate.currentReservation()!=null ||
@@ -205,6 +287,9 @@ object AutomationBridge {
                     put("platformLifecycleVersion",1)
                     put("captureDiagnosticVersion",1)
                     put("partyRebuildVersion",1)
+                    put("calculatedPartyVersion",1)
+                    put("supportAppendMaxVersion",1)
+                    put("supportAppendUnlockedVersion",1)
                     put("decisionModes",JsonArray(listOf("script","smart").map(::JsonPrimitive)))
                     put("externalPlanLimits",buildJsonObject {
                         put("strategyOwner","FGOAgent");put("frameTransformOwner","FGOAgent")
@@ -220,7 +305,7 @@ object AutomationBridge {
                 automationConfigurations(prefs.battleConfigs,{ config ->
                     config.server ?: runCatching {manager.get()?.automationRequest(config.id,1,300)?.server}.getOrNull()
                 },::region)
-            },platform={ op,q -> PlatformLifecycle.request(context,op,q) },externalPlans=::externalRequest, partyEditor=::partyRequest,
+            },platform={ op,q -> PlatformLifecycle.request(context,op,q) },externalPlans=::externalRequest, partyEditor={ op,q -> partyRequest(context,prefs,op,q) },
                 diagnostic={
                     if(executorBusy()) throw RpcFailure("Busy","Capture diagnostic requires an idle runner")
                     val runner=manager.get() ?: throw RpcFailure("RequiresUserConsent","Prepare the native capture service first")

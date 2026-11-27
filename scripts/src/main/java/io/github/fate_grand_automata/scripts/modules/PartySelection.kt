@@ -4,6 +4,7 @@ import io.github.fate_grand_automata.scripts.IFgoAutomataApi
 import io.github.fate_grand_automata.scripts.entrypoints.AutoBattle
 import io.github.fate_grand_automata.scripts.Images
 import io.github.fate_grand_automata.scripts.ScriptLog
+import io.github.fate_grand_automata.scripts.enums.GameServer
 import io.github.fate_grand_automata.scripts.prefs.IBattleConfig
 import io.github.lib_automata.dagger.ScriptScope
 import javax.inject.Inject
@@ -18,10 +19,16 @@ class PartySelection @Inject constructor(
     private var partySelected = false
     private var agentPartyVerified = false
 
-    private fun readExactSlot(): Int? =
-        locations.selectedPartyRegion.findAll(images[Images.SelectedParty]).singleOrNull()?.let {
-            AgentPartyGate.indexFromMarker(it.region.center.x, locations.partySelectionArray.map { tap -> tap.x })
-        }
+    private fun readExactSlot(): Int? {
+        // The old EN crop scores similarly for active and inactive JP dots.
+        // Reuse the JP editor's more discriminative active-dot template.
+        val jp = prefs.gameServer is GameServer.Jp
+        val image = if (jp) Images.AgentSelectedPartyJp else Images.SelectedParty
+        return locations.selectedPartyRegion.findAll(images[image], similarity = if (jp) .85 else null)
+            .singleOrNull()?.let {
+                AgentPartyGate.indexFromMarker(it.region.center.x, locations.partySelectionArray.map { tap -> tap.x })
+            }
+    }
 
     fun requirePartyForRepeat() {
         if (battleConfig.agentManagesParty && !agentPartyVerified) {

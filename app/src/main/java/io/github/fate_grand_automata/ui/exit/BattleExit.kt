@@ -69,6 +69,9 @@ private fun AutoBattle.ExitReason.text(): String = when (this) {
     is AutoBattle.ExitReason.LimitRuns -> stringResource(R.string.times_ran, count)
     AutoBattle.ExitReason.SupportSelectionManual -> stringResource(R.string.support_selection_manual)
     AutoBattle.ExitReason.SupportSelectionPreferredNotSet -> stringResource(R.string.support_selection_preferred_not_set)
+    AutoBattle.ExitReason.SupportRequirementsUnmet -> stringResource(R.string.agent_support_requirements_unmet)
+    AutoBattle.ExitReason.SupportSkillDisplayUnverified -> stringResource(R.string.agent_support_display_unverified)
+    AutoBattle.ExitReason.SupportVerificationRequired -> stringResource(R.string.agent_support_verification_required)
     is AutoBattle.ExitReason.SkillCommandParseError -> "AutoSkill Parse error:\n\n${cause?.message}"
     is AutoBattle.ExitReason.CardPriorityParseError -> msg
     AutoBattle.ExitReason.FirstClearRewards -> stringResource(R.string.first_clear_rewards)

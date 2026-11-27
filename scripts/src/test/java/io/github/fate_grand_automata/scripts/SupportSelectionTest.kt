@@ -36,6 +36,7 @@ class SupportSelectionTest {
         alsoCheckAll: Boolean = false,
         supportClass: SupportClass = SupportClass.None,
         needToRetry: Boolean = false,
+        strictRefreshLimit: Boolean = false,
     ): Boolean {
         val screen = FakeSupportScreen()
         val supportPrefs = mockk<ISupportPreferences>()
@@ -59,7 +60,7 @@ class SupportSelectionTest {
         }
 
         setup(screen)
-        return loop.select(provider).also {
+        return loop.select(provider, strictRefreshLimit).also {
             verify(screen)
         }
     }
@@ -80,6 +81,19 @@ class SupportSelectionTest {
                 supportProvider = { SupportSelectionResult.Refresh }
             )
         )
+    }
+
+    @Test
+    fun `strict mode does not allow endless early refresh or report a match`() {
+        assertFalse(testSupportSelection(
+            setup = {
+                it.state = FakeSupportScreen.State.SomeSupports
+                it.onRefresh = { screen -> screen.state = FakeSupportScreen.State.SomeSupports }
+            },
+            verify = { assertThat(it.refreshCount).isEqualTo(3) },
+            supportProvider = { SupportSelectionResult.EarlyRefresh },
+            strictRefreshLimit = true
+        ))
     }
 
     @Test

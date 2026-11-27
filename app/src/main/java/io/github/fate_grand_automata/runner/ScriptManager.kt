@@ -15,6 +15,7 @@ import io.github.fate_grand_automata.accessibility.TapperService
 import io.github.fate_grand_automata.accessibility.AccessibilityGestureException
 import io.github.fate_grand_automata.accessibility.AccessibilityGestures
 import io.github.fate_grand_automata.accessibility.GestureFailure
+import io.github.fate_grand_automata.automation.NativePartyEditor
 import io.github.fate_grand_automata.automation.AutomationBridge
 import io.github.fate_grand_automata.automation.automationConfig
 import io.github.fate_grand_automata.di.script.ScriptComponent
@@ -141,7 +142,10 @@ class ScriptManager @Inject constructor(
         }
     }
 
-    fun launchPartyEditor(reference: Int, progress: (String) -> Unit, done: (Throwable?) -> Unit) {
+    fun launchPartyEditor(
+        operation: (NativePartyEditor, () -> Boolean) -> Unit,
+        done: (Throwable?) -> Unit
+    ) {
         if (!isAutomationPrepared || serviceDestroyed)
             throw io.github.fga.automation.RpcFailure("RequiresUserConsent", "Prepare FGA capture and accessibility")
         val reservation = runGate.reserve(ScriptRunGate.Owner.Automation)
@@ -155,8 +159,7 @@ class ScriptManager @Inject constructor(
                     .runPreferences(ScriptRunPreferences(preferences)).build()
                 val entry = EntryPoints.get(component, ScriptEntryPoint::class.java)
                 gestures = entry.gestures()
-                entry.partyEditor().rebuild(reference,
-                    { runGate.canPrepare(reservation) && !serviceDestroyed }, progress)
+                operation(entry.partyEditor()) { runGate.canPrepare(reservation) && !serviceDestroyed }
             }
             val finish = {
                 if (runGate.finish(reservation)) done(result.exceptionOrNull())

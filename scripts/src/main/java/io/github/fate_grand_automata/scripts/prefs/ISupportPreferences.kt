@@ -21,6 +21,10 @@ interface ISupportPreferences {
     val skill2Max: Boolean
     val skill3Max: Boolean
 
+    /** 1-based append slots required at Lv.10; persisted only by an explicit Agent recipe. */
+    val appendMaxSlots: Set<String> get() = emptySet()
+    val appendUnlockedSlots: Set<String> get() = emptySet()
+
     val grandServant: Boolean
     val bondCEEffect: BondCEEffectEnum
     val requireBothNormalAndRewardMatch: Boolean

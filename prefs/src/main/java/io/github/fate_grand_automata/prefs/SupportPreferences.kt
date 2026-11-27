@@ -33,6 +33,8 @@ internal class SupportPreferences(
     override val skill1Max by prefs.skill1Max
     override val skill2Max by prefs.skill2Max
     override val skill3Max by prefs.skill3Max
+    override val appendMaxSlots by prefs.appendMaxSlots
+    override val appendUnlockedSlots by prefs.appendUnlockedSlots
 
     override val grandServant by prefs.grandServant
     override val bondCEEffect by prefs.bondCEEffect

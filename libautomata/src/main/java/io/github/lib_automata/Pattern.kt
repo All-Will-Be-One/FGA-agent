@@ -66,6 +66,9 @@ interface Pattern : AutoCloseable {
      */
     fun copy(): Pattern
 
+    /** Saturated, bright pixel fraction; unknown/non-color sources must fail closed. */
+    fun brightSaturatedFraction(): Double = 0.0
+
     fun threshold(value: Double): Pattern
 
     fun isWhite(): Boolean

@@ -48,6 +48,17 @@ class DroidCvPattern(
     override fun toString() =
         tag.ifBlank { super.toString() }
 
+    override fun brightSaturatedFraction(): Double {
+        if (width == 0 || height == 0 || mat.channels() != 3) return 0.0
+        return Mat().use { hsv ->
+            Mat().use { mask ->
+                Imgproc.cvtColor(mat, hsv, Imgproc.COLOR_BGR2HSV)
+                Core.inRange(hsv, Scalar(0.0, 80.0, 150.0), Scalar(179.0, 255.0, 255.0), mask)
+                Core.countNonZero(mask).toDouble() / (width * height)
+            }
+        }
+    }
+
     override fun close() {
         if (ownsMat) {
             mat.release()

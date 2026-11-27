@@ -35,6 +35,8 @@ class SupportPrefsCore(
     val skill1Max = maker.bool("support_skill_max_1")
     val skill2Max = maker.bool("support_skill_max_2")
     val skill3Max = maker.bool("support_skill_max_3")
+    val appendMaxSlots = maker.stringSet("agent_support_append_max_slots")
+    val appendUnlockedSlots = maker.stringSet("agent_support_append_unlocked_slots")
 
     val grandServant = maker.bool("support_grand_servant")
     val bondCEEffect = maker.enum(

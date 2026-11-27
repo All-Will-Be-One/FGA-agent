@@ -6,6 +6,7 @@ import io.github.fate_grand_automata.scripts.prefs.IBattleConfig
 import io.github.fate_grand_automata.scripts.modules.AgentPartyGate
 import io.github.fate_grand_automata.scripts.prefs.IPerServerConfigPrefs
 import io.github.fate_grand_automata.scripts.prefs.IPreferences
+import io.github.fate_grand_automata.scripts.prefs.ISupportPreferences
 import io.github.fate_grand_automata.scripts.decision.NativeBattleDecisionProvider
 import io.github.fate_grand_automata.scripts.decision.DisabledNativeBattleDecisionProvider
 
@@ -20,12 +21,20 @@ class ScriptRunPreferences(
             val request = validated.request
             require(decisionProvider.enabled == (request.decisionMode == "smart")) { "Decision mode and native provider do not match" }
             val partyPlan = validated.config.ownPartyPlan.toList()
+            val sourceSupport = validated.config.support
+            val maxAppend = sourceSupport.appendMaxSlots.toSet()
+            val unlockedAppend = sourceSupport.appendUnlockedSlots.toSet()
+            val fixedSupport = object : ISupportPreferences by sourceSupport {
+                override val appendMaxSlots = maxAppend
+                override val appendUnlockedSlots = unlockedAppend
+            }
             val fixedConfig = object : IBattleConfig by validated.config {
                 override val id = request.configId
                 override val server = request.server
                 override val agentManagesParty = true
                 override val party = AgentPartyGate.RESERVED_INDEX
                 override val ownPartyPlan = partyPlan
+                override val support = fixedSupport
                 override var skillCommand: String
                     get() = validated.skillCommand
                     set(@Suppress("UNUSED_PARAMETER") value) = error("Automation skill command is frozen")

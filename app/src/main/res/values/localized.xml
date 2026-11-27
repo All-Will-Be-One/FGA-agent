@@ -647,6 +647,9 @@ If your FGO version isn't recognized or runs inside an app cloner, select your s
     <string name="agent_party_reservation_hint">Choose presets 1–14 manually. The Agent uses preset 15.</string>
     <string name="agent_party_reserved_error">Preset 15 is reserved for the Agent. Choose presets 1–14.</string>
     <string name="agent_party_unverified">Could not verify preset 15. The Agent did not start another quest.</string>
+    <string name="agent_support_requirements_unmet">No support met the required Append Skills. The Agent did not start the quest.</string>
+    <string name="agent_support_display_unverified">Could not verify the support skill display. Restore the Normal skill display before retrying.</string>
+    <string name="agent_support_verification_required">This setup requires verified Append Skills. Start from the support list.</string>
     <string name="agent_party_editor_required">The plan calls for changing Servants or Craft Essences. The Agent stopped before the quest because those edits could not be verified.</string>
     <string name="agent_party_ce">Craft Essence</string>
     <string name="agent_party_ce_summary">Craft Essence: %1$s</string>

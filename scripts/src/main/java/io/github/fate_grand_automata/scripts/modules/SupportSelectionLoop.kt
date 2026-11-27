@@ -13,7 +13,7 @@ class SupportSelectionLoop @Inject constructor(
     private val refresher: SupportScreenRefresher,
     private val supportClassPicker: SupportClassPicker
 ) {
-    fun select(provider: SupportSelectionProvider): Boolean {
+    fun select(provider: SupportSelectionProvider, strictRefreshLimit: Boolean = false): Boolean {
         var numberOfSwipes = 0
         var numberOfUpdates = 0
         var onAllList = false
@@ -50,7 +50,8 @@ class SupportSelectionLoop @Inject constructor(
                 }
                 // Refresh support list if not exceeded max refreshes
                 // or if Early Refresh due to lack of scrollbar
-                result is SupportSelectionResult.EarlyRefresh || numberOfUpdates < commonSupportPrefs.maxUpdates -> {
+                (!strictRefreshLimit && result is SupportSelectionResult.EarlyRefresh) ||
+                    numberOfUpdates < commonSupportPrefs.maxUpdates -> {
                     refresher.refreshSupportList()
                     onAllList = false
 

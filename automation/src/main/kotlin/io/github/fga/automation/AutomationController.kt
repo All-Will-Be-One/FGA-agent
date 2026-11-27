@@ -265,7 +265,7 @@ class RpcDispatcher(private val controller:AutomationController,private val capa
             "configs" -> configs()
             "diagnostic.capture" -> diagnostic?.invoke()
                 ?: throw RpcFailure("UnsupportedCapability","Native capture diagnostic is unavailable")
-            "party.rebuild","party.status" -> partyEditor?.invoke(op,q)
+            "party.rebuild","party.apply","party.status" -> partyEditor?.invoke(op,q)
                 ?: throw RpcFailure("UnsupportedCapability","Native party editor is unavailable")
             "start" -> controller.snapshotJson(controller.start(s("requestId"),s("configId"),Json.decodeFromJsonElement<RunLimits>(q.getValue("limits")),q["decisionMode"]?.jsonPrimitive?.content ?: "script"))
             "status" -> controller.snapshotJson(controller.status(q["runId"]?.jsonPrimitive?.content,q["requestId"]?.jsonPrimitive?.content))

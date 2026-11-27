@@ -70,3 +70,39 @@ Smart DI never reads unused legacy AutoSkill/Spam/card-priority getters. Only en
 New start and plan identities/Executing transitions are durable before input. Ordinary events, state snapshots, confirmed completion and optional cleanup retain their true in-memory state when disk logging fails. Stop dispatch never waits for a successful diagnostic write; failure does not fabricate success. Native process instance IDs distinguish a new controller object from a new Android process. Only the one-per-process bridge, with its real runner/gate/owner absent, reconciles older process records as interrupted and closes their external session, preserving IDs/counts and Unconfirmed receipts without replay.
 
 Known configured stops (CE, materials, first-clear, run ceiling, manual support/inventory) retain their reason and count. They are NeedsAttention when the requested target is unmet; only actual native counts or the explicit AP condition can fulfill the target. Unexpected errors remain failures. No additional screen, skill-effect, per-card acceptance or animation timer is introduced.
+
+### Calculated JP formation (reserve XV)
+
+If `calculatedPartyVersion` is 1, `party.apply` takes a versioned calculated
+formation and a replay-checked, fixed NP script in `action`. The target is
+always XV, currently on the JP Party Formation screen. It is independent of
+`party.rebuild` (which still uses an existing reference preset). Exact public
+catalog IDs are used for owned servants and Craft Essences; the CE picker checks
+the event filter before the normal list. A normal CE request can use a max-limit-
+broken copy when needed, not vice versa.
+
+Poll `party.status` with the same `requestId` until the job is quiescent. A
+successful receipt includes the saved configuration ID, native script SHA-256 and
+`readyToStart: false`. This action never starts a quest or changes the Mystic
+Code. A failed edit can leave an unsaved XV draft; inspect the game before
+retrying. Never blindly repeat a lost/ambiguous request after process restart.
+
+### Strict support Append Skills (JP XV)
+
+When `supportAppendMaxVersion=1`, calculated `party.apply` accepts optional
+`action.supportAppendMax`: ascending, unique, one-based indices from 1 to 5.
+Each listed slot must be **Lv.10**; absence leaves behavior unchanged.
+The quiescent successful receipt echoes the installed list. It is bound to the
+calculated config ID, not the native script hash. The regular skill and
+equipment filters still apply. Only eligible visible candidates are inspected
+in the game's Append view; the normal display and same row must be reacquired
+before selection. The configured refresh budget is a hard limit; no first-row
+or unchecked fallback. Start a guarded config on the support list (or allow
+FGA to open it from the quest list), not from an already-started battle. A
+guarded configuration only guarantees the stated Lv.10 slots, not arbitrary
+minimum levels, exact borrowed CE, or other unconfigured support stats.
+
+The JP bridge also advertises `supportAppendUnlockedVersion=1`.
+`action.supportAppendUnlocked` requires Lv.1 or higher in the listed slots
+using a visible lit icon; it is echoed in the receipt. It cannot overlap
+`supportAppendMax`. It does not recognize arbitrary numeric thresholds.

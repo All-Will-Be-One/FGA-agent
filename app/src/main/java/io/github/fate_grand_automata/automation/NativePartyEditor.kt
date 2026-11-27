@@ -13,6 +13,7 @@ import io.github.lib_automata.ScreenshotService
 import io.github.lib_automata.Size
 import io.github.lib_automata.dagger.ScriptScope
 import io.github.fga.automation.RpcFailure
+import io.github.fate_grand_automata.supportcatalog.ServantCatalog
 import javax.inject.Inject
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -65,7 +66,8 @@ class NativePartyEditor @Inject constructor(
     }
 
     private fun template(name: String): Pattern = assets.getOrPut(name) {
-        context.assets.open("Jp/party-editor/$name.png").use { DroidCvPattern(it, false, name) }
+        val path = if (name == "dot") "Jp/selected_party_agent.png" else "Jp/party-editor/$name.png"
+        context.assets.open(path).use { DroidCvPattern(it, false, name) }
     }
 
     private fun Pattern.has(name: String, roi: Region, score: Double = .88) =
@@ -150,26 +152,120 @@ class NativePartyEditor @Inject constructor(
     private fun resetScroll(ce: Boolean) {
         // The JP picker has an independently draggable scrollbar; swiping a header
         // or the formation itself would be unsafe.
-        val top = if (ce) 252 else 129
-        val y = (top + 485) / 2
-        drag(1013, y, 1013, top + 2)
+        if (ce) {
+            // The track does not jump to the drag's start. Drag the observed
+            // thumb, and verify the actual top, otherwise max-level CEs get skipped.
+            repeat(4) {
+                val thumb = await("Craft Essence scroll track") { equipment() }.use {
+                    it.match(template("ce-scroll-thumb"), box(997, 246, 34, 241), .89)
+                } ?: return  // some filtered lists fit on one page and have no thumb
+                val y = (thumb.third / scale).roundToInt()
+                if (y <= 263) return
+                drag(1014, y, 1014, 240)
+                Thread.sleep(450)
+            }
+            fail("Could not verify top of the Craft Essence inventory")
+        }
+        drag(1013, 307, 1013, 131)
         Thread.sleep(450)
     }
 
     private data class Member(
         val slot: Int,
-        val portrait: Pattern,
+        val portrait: Pattern?,
         val essences: List<Pattern>,
         val previewName: Pattern?,
         val previewEffect: Pattern?,
-        val limitBreak: AgentLimitBreak?
+        val limitBreak: AgentLimitBreak?,
+        val idArt: IdArt? = null
     ) : AutoCloseable {
         override fun close() {
-            portrait.close()
+            portrait?.close()
+            idArt?.close()
             essences.forEach { it.close() }
             previewName?.close()
             previewEffect?.close()
         }
+    }
+
+    /** Multiple independent art patches guard against level, cost, frame and event overlays.
+     * Widths are at the existing 720p scale and were checked on the actual JP picker/editor. */
+    private data class ArtPatch(val image: Pattern, val xToCenter: Int) : AutoCloseable {
+        override fun close() = image.close()
+    }
+    private data class IdArt(
+        val formation: List<List<ArtPatch>>,
+        val servants: List<List<ArtPatch>>,
+        val equipment: List<List<ArtPatch>>,
+        val banner: List<ArtPatch>,
+        val preview: List<ArtPatch>
+    ) : AutoCloseable {
+        override fun close() =
+            (formation.flatten() + servants.flatten() + equipment.flatten() + banner + preview)
+                .forEach { it.close() }
+    }
+    private data class Fraction(val x: Double, val y: Double, val w: Double, val h: Double)
+    private val faceWindows = listOf(
+        Fraction(.31, .28, .34, .19), Fraction(.28, .45, .32, .18),
+        Fraction(.40, .35, .32, .22), Fraction(.26, .20, .47, .13)
+    )
+    private val bannerWindows = listOf(
+        Fraction(.13, .29, .34, .35), Fraction(.48, .30, .34, .39),
+        Fraction(.32, .34, .34, .35)
+    )
+
+    private fun patches(bytes: ByteArray, width: Int, windows: List<Fraction>): List<ArtPatch> =
+        bytes.inputStream().use { stream ->
+            DroidCvPattern(stream, false, "catalog-party-art").use { raw ->
+                require(raw.width in 64..512 && raw.height in 48..512) { "Invalid catalog artwork" }
+                val height = (width * raw.height.toDouble() / raw.width).roundToInt()
+                raw.resize(Size(width, height)).use { face ->
+                    windows.map { (x, y, w, h) ->
+                        val left = (width * x).roundToInt()
+                        val right = (width * (x + w)).roundToInt()
+                        val top = (height * y).roundToInt()
+                        val bottom = (height * (y + h)).roundToInt()
+                        ArtPatch(face.crop(Region(left, top, right - left, bottom - top)),
+                            width / 2 - (left + right) / 2)
+                    }
+                }
+            }
+        }
+
+    private fun loadMember(member: CalculatedMember, faces: Map<Int, List<ByteArray>>,
+                           essences: Map<Int, Pair<ByteArray, ByteArray>>): Member {
+        val resources = mutableListOf<ArtPatch>()
+        fun make(bytes: ByteArray, width: Int, windows: List<Fraction>) =
+            patches(bytes, width, windows).also { resources.addAll(it) }
+        try {
+            val ownFaces = faces.getValue(member.servantId)
+            val equip = member.ce?.let { essences.getValue(it.id) }
+            return Member(member.slot - 1, null, emptyList(), null, null, member.ce?.let {
+                if (it.mlb) AgentLimitBreak.Max else AgentLimitBreak.Normal
+            }, IdArt(
+                formation = ownFaces.map { make(it, 195, faceWindows) },
+                servants = ownFaces.map { make(it, 118, faceWindows) },
+                equipment = equip?.let { listOf(make(it.first, 118, faceWindows)) }.orEmpty(),
+                banner = equip?.let { make(it.second, 188, bannerWindows) }.orEmpty(),
+                preview = equip?.let { make(it.second, 158, bannerWindows) }.orEmpty()
+            ))
+        } catch (e: Exception) {
+            resources.forEach { it.close() }
+            throw e
+        }
+    }
+
+    private fun artMatches(f: Pattern, patches: List<ArtPatch>, roi: Region): Boolean =
+        patches.count { f.match(it.image, roi, .91) != null } >= 2
+
+    private fun hasEquipment(member: Member) =
+        member.essences.isNotEmpty() || member.idArt?.equipment?.isNotEmpty() == true
+
+    private fun gearMatches(f: Pattern, m: Member): Boolean {
+        if (!hasEquipment(m)) return f.unequipped(m.slot)
+        return m.idArt?.let { art ->
+            artMatches(f, art.banner, box(centers[m.slot] - 62, 283, 124, 58))
+        } ?: (m.essences.count { f.match(it, ceBox(m.slot), .92) != null } >= 2)
     }
 
     private fun portraitBox(slot: Int) = box(centers[slot] - 25, 144, 50, 49)
@@ -205,13 +301,14 @@ class NativePartyEditor @Inject constructor(
     }
 
     private fun portraitMatches(f: Pattern, m: Member) =
-        f.match(m.portrait, box(centers[m.slot] - 31, 138, 62, 61), .90) != null
+        m.idArt?.formation?.any {
+            artMatches(f, it, box(centers[m.slot] - 62, 124, 124, 103))
+        } ?: (f.match(requireNotNull(m.portrait), box(centers[m.slot] - 31, 138, 62, 61), .90) != null)
 
     private fun rosterMatches(f: Pattern, members: List<Member>, support: Int): Boolean {
         val empty = centers.indices.filter { i -> i != support && members.none { it.slot == i } }
         return f.support() == support && empty.all { f.emptySlot(it) } && members.all { m ->
-            portraitMatches(f, m) && if (m.essences.isEmpty()) f.unequipped(m.slot)
-                else m.essences.count { f.match(it, ceBox(m.slot), .92) != null } >= 2
+            portraitMatches(f, m) && gearMatches(f, m)
         }
     }
 
@@ -244,6 +341,31 @@ class NativePartyEditor @Inject constructor(
         return result
     }
 
+    private fun catalogCandidates(f: Pattern, variants: List<List<ArtPatch>>, ce: Boolean): List<Candidate> {
+        val top = if (ce) 254 else 131
+        val roi = box(176, top, 763, 489 - top)
+        val result = mutableListOf<Candidate>()
+        f.crop(roi).use { grid ->
+            for (variant in variants) {
+                val matches = variant.flatMapIndexed { i, patch ->
+                    grid.findMatches(patch.image, .91).take(30).mapNotNull { m ->
+                        val x = ((m.region.center.x + roi.x + patch.xToCenter) / scale).roundToInt()
+                        val y = ((m.region.center.y + roi.y) / scale).roundToInt()
+                        val cx = gridX.minBy { abs(it - x) }
+                        if (abs(cx - x) > 11 || y !in top + 7..460) null else Candidate(cx, y, m.score, i)
+                    }.toList()
+                }
+                matches.sortedByDescending { it.score }.forEach { match ->
+                    if (result.any { it.x == match.x && abs(it.y - match.y) < 44 }) return@forEach
+                    val votes = matches.filter { it.x == match.x && abs(it.y - match.y) < 29 }
+                        .map { it.votes }.distinct().size
+                    if (votes >= 2 && match.score >= .94) result += match.copy(votes = votes)
+                }
+            }
+        }
+        return result.sortedByDescending { it.score }
+    }
+
     private fun scroll(ce: Boolean) {
         drag(950, 450, 950, if (ce) 277 else 175)
         Thread.sleep(430)
@@ -264,16 +386,18 @@ class NativePartyEditor @Inject constructor(
             tap(centers[m.slot], 175)
             await("Servant Selection") { servants() }.close()
         } else picker.close()
-        val patches = listOf(
-            m.portrait.crop(box(4, 9, 42, 25)),
-            m.portrait.crop(box(3, 19, 43, 24))
-        )
+        val patches = m.portrait?.let {
+            listOf(it.crop(box(4, 9, 42, 25)), it.crop(box(3, 19, 43, 24)))
+        }.orEmpty()
         try {
             resetScroll(false)
             repeat(32) { page ->
-                val matches = await("Servant Selection inventory") { servants() }.use { candidates(it, patches, false) }
+                val matches = await("Servant Selection inventory") { servants() }.use { picker ->
+                    m.idArt?.let { catalogCandidates(picker, it.servants, false) } ?: candidates(picker, patches, false)
+                }
                 val best = matches.firstOrNull()
-                if (best != null && (matches.size == 1 || best.score - matches[1].score >= .028)) {
+                if (best != null && (matches.size == 1 ||
+                        (m.idArt == null && best.score - matches[1].score >= .028))) {
                     tap(best.x, best.y)
                     await("XV servant ${m.slot + 1} portrait after selection") {
                         formation() && party() == 15 && portraitMatches(this, m)
@@ -289,8 +413,12 @@ class NativePartyEditor @Inject constructor(
 
     private fun limitBreak(f: Pattern): AgentLimitBreak? {
         val text = box(296, 162, 443, 69)
+        // Ordinary CEs can render the max-limit-break marker inline in the
+        // effect text, at a different size from the event CE template.
+        val inline = f.match(template("ce-inline-max-limit"), text, .0)?.first ?: 0.0
+        if (inline >= .84) return AgentLimitBreak.Max
         val stamp = template("max-limit")
-        var best = 0.0
+        var best = inline
         for (factor in listOf(.76, .80, .84, .88, .91, .94, .97, 1.0, 1.04, 1.08, 1.12, 1.16)) {
             val score = stamp.resize(Size((stamp.width * factor).roundToInt(), (stamp.height * factor).roundToInt()))
                 .use { f.match(it, text, .0)?.first ?: 0.0 }
@@ -301,6 +429,12 @@ class NativePartyEditor @Inject constructor(
     }
 
     private fun previewMatches(f: Pattern, m: Member, allowUpgrade: Boolean): Boolean {
+        m.idArt?.let {
+            return artMatches(f, it.preview, box(162, 205, 104, 32)) &&
+                limitBreak(f)?.let { observed ->
+                    AgentEquipmentCompatibility.accepts(requireNotNull(m.limitBreak), observed, allowUpgrade)
+                } == true
+        }
         if (f.match(requireNotNull(m.previewName), box(298, 128, 423, 35), .975) == null) return false
         // Level/HP/ATK are not part of identity. Identical effect text can corroborate
         // an unreadable marker, but never overrule an observed max → normal mismatch.
@@ -314,7 +448,7 @@ class NativePartyEditor @Inject constructor(
     }
 
     private fun chooseEquipment(m: Member) {
-        if (m.essences.isEmpty()) return
+        if (!hasEquipment(m)) return
         await("reserved XV with matching servant before Craft Essence") {
             formation() && party() == 15 && portraitMatches(this, m)
         }.close()
@@ -324,7 +458,8 @@ class NativePartyEditor @Inject constructor(
             val passes = if (m.limitBreak == AgentLimitBreak.Max) listOf(false) else listOf(false, true)
             for (upgrade in passes) {
                 for (eventOnly in listOf(true, false)) {
-                    if (eventOnly) selectTab() else toggleFilter(false)
+                    if (eventOnly) selectTab()
+                    else frame().use { if (ceFilterEvent(it)) toggleFilter(false) }
                     resetScroll(true)
                     var previousGrid: Pattern? = null
                     try {
@@ -336,7 +471,8 @@ class NativePartyEditor @Inject constructor(
                                 if (previousGrid?.let { f.match(it, grid, .997) != null } == true) return@use null
                                 previousGrid?.close()
                                 previousGrid = f.crop(grid)
-                                candidates(f, m.essences, true)
+                                m.idArt?.let { catalogCandidates(f, it.equipment, true) }
+                                    ?: candidates(f, m.essences, true)
                             } ?: break
                             for (candidate in options) {
                                 val occupied = frame().use {
@@ -353,7 +489,7 @@ class NativePartyEditor @Inject constructor(
                                 tap(888, 208)
                                 await("XV equipped slot ${m.slot + 1}; transfers forbidden") {
                                     formation() && party() == 15 &&
-                                        m.essences.count { match(it, ceBox(m.slot), .92) != null } >= 2
+                                        gearMatches(this, m)
                                 }.close()
                                 return
                             }
@@ -368,7 +504,7 @@ class NativePartyEditor @Inject constructor(
     }
 
     private fun savedEquipmentMatches(members: List<Member>): Boolean {
-        for (m in members.filter { it.essences.isNotEmpty() }) {
+        for (m in members.filter(::hasEquipment)) {
             await("XV before reading saved equipment") { formation() && party() == 15 }.close()
             tap(centers[m.slot], 313)
             await("saved Craft Essence opens") { equipment() }.close()
@@ -383,8 +519,60 @@ class NativePartyEditor @Inject constructor(
         return true
     }
 
-    fun rebuild(reference: Int, canContinue: () -> Boolean, progress: (String) -> Unit) {
-        require(reference in 1..14)
+    private fun saveAndReopen(members: List<Member>, support: Int) {
+        report("saving XV and reopening")
+        await("complete XV before saving") {
+            formation() && party() == 15 && rosterMatches(this, members, support)
+        }.close()
+        saved = true
+        // In arrangement mode the first press may only return to the normal
+        // editor. Confirm the menu, or retry only on the same verified XV.
+        var menu = false
+        for (attempt in 1..3) {
+            await("verified XV before save confirmation") {
+                formation() && party() == 15 && rosterMatches(this, members, support)
+            }.close()
+            tap(983, 442)
+            val next = awaitOrNull(11) { onFormationMenu() }
+            if (next != null) {
+                next.close()
+                menu = true
+                break
+            }
+        }
+        if (!menu) fail("Expected Formation menu after save")
+        // A detected menu can still be in its return animation and ignore the
+        // first tap. Retry only if the Formation menu is still positively visible;
+        // never tap the same coordinate on an editor or another screen.
+        var reopened = false
+        for (attempt in 1..2) {
+            Thread.sleep(650)
+            await("stable Formation menu before reopening XV") { onFormationMenu() }.close()
+            tap(841, 116)
+            val current = awaitOrNull(7) {
+                formation() && party() == 15 && rosterMatches(this, members, support)
+            }
+            if (current != null) {
+                current.close()
+                reopened = true
+                break
+            }
+            if (!frame().use { it.onFormationMenu() }) break
+        }
+        if (!reopened) fail("Expected reopened XV matching ordered servants and Craft Essences")
+        report("rechecking saved Craft Essence names and limit breaks")
+        if (!savedEquipmentMatches(members))
+            fail("Reopened XV has an incorrect Craft Essence name or limit break")
+    }
+
+    fun rebuild(reference: Int, canContinue: () -> Boolean, progress: (String) -> Unit) =
+        applyFormation(reference, null, canContinue, progress)
+
+    fun apply(plan: CalculatedFormation, canContinue: () -> Boolean, progress: (String) -> Unit) =
+        applyFormation(null, plan, canContinue, progress)
+
+    private fun applyFormation(reference: Int?, plan: CalculatedFormation?,
+                               canContinue: () -> Boolean, progress: (String) -> Unit) {
         deadline = SystemClock.elapsedRealtime() + 300_000
         report = progress
         ownsRunner = canContinue
@@ -393,11 +581,29 @@ class NativePartyEditor @Inject constructor(
             if (abs(window.width.toDouble() / window.height - 1100.0 / 495) > .012 || window.x != 0 || window.y != 0)
                 fail("Unsupported JP formation aspect ratio or game bounds")
             await("reserved Party XV on the JP formation screen") { formation() && party() == 15 }.close()
-            report("capturing reference preset $reference")
-            val support = captureReference(reference, members)
-            goTo(15)
+            val support = if (reference != null) {
+                report("capturing reference preset $reference")
+                captureReference(reference, members).also { goTo(15) }
+            } else {
+                val calculated = requireNotNull(plan)
+                report("preflight: resolve calculated servant and Craft Essence IDs")
+                val faces = calculated.members.map { it.servantId }.distinct().associateWith { id ->
+                    checkTime()
+                    ServantCatalog.faceUrls(id).mapNotNull { url ->
+                        checkTime()
+                        ServantCatalog.face(url)
+                    }.also { require(it.isNotEmpty()) { "No usable portrait for servant $id" } }
+                }
+                val essences = calculated.members.mapNotNull { it.ce?.id }.distinct().associateWith { id ->
+                    checkTime()
+                    ServantCatalog.equipFaces(id)
+                }
+                calculated.members.sortedBy { it.slot }.forEach { members += loadMember(it, faces, essences) }
+                calculated.supportSlot - 1
+            }
             if (members.count { it.slot < 3 } != 2) fail("Reference needs two owned starters and one support slot")
             if (frame().use { rosterMatches(it, members, support) } && savedEquipmentMatches(members)) {
+                if (plan != null) saveAndReopen(members, support)
                 report("XV already matches; no reconstruction performed")
                 return
             }
@@ -475,34 +681,16 @@ class NativePartyEditor @Inject constructor(
                 report("equipping slot ${member.slot + 1}")
                 chooseEquipment(member)
             }
-            val arranging = await("complete XV before saving") {
-                formation() && party() == 15 && rosterMatches(this, members, support)
-            }.use { it.arrangement() }
-            report("saving XV and reopening")
-            saved = true
-            tap(983, 442)
-            if (arranging) {
-                Thread.sleep(700)
-                await("XV leaves arrangement mode") {
-                    onFormationMenu() ||
-                        (formation() && party() == 15 && !arrangement() && rosterMatches(this, members, support))
-                }.use { if (!it.onFormationMenu()) tap(983, 442) }
+            saveAndReopen(members, support)
+            if (reference != null) {
+                report("checking original preset $reference was not altered")
+                goTo(reference)
+                await("read-only reference still matches original captured lineup") {
+                    formation() && party() == reference && rosterMatches(this, members, support)
+                }.close()
+                goTo(15)
             }
-            await("Formation menu after save") { onFormationMenu() }.close()
-            tap(841, 116)
-            await("reopened XV matching ordered servants and Craft Essences") {
-                formation() && party() == 15 && rosterMatches(this, members, support)
-            }.close()
-            report("rechecking saved Craft Essence names and limit breaks")
-            if (!savedEquipmentMatches(members))
-                fail("Reopened XV has an incorrect Craft Essence name or limit break")
-            report("checking original preset $reference was not altered")
-            goTo(reference)
-            await("read-only reference still matches original captured lineup") {
-                formation() && party() == reference && rosterMatches(this, members, support)
-            }.close()
-            goTo(15)
-            report("verified XV after save and reopen; reference unchanged")
+            report("verified XV after save and reopen")
         } finally {
             members.forEach { it.close() }
             assets.values.forEach { it.close() }

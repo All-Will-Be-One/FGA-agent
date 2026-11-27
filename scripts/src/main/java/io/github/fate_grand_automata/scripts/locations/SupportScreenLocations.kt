@@ -18,6 +18,7 @@ class SupportScreenLocations @Inject constructor(
     val extraRegion = Region(1200, 200, 130, 130) + headerOffset
 
     val updateClick = Location(1865, 260) + headerOffset
+    val skillDisplaySwitchClick = Location(1695, 260) + headerOffset
 
     val listTopClick = Location(if (isWide) -218 else -80, 360).xFromRight()
 
@@ -36,6 +37,18 @@ class SupportScreenLocations @Inject constructor(
 
             Location(305 + border, 0)
         } else Location(94, 0)
+
+    val skillDisplayLabelsRegion = Region(1550, 332, 500, 1086) + supportOffset
+
+    // Relative to the support configuration button, not the physical screen origin.
+    fun appendLevelRegion(row: Region, slot: Int) =
+        Region(row.x + 1610 + (slot - 1) * 75, row.y + 325, 60, 50)
+
+    fun appendIconBody(row: Region, slot: Int) =
+        Region(row.x + 1598 + (slot - 1) * 75, row.y + 292, 46, 31)
+
+    fun appendRowIdentity(row: Region) = Region(row.x + 385, row.y + 4, 630, 57)
+    fun fullyVisibleAppendRow(row: Region) = row.y >= 332 && appendLevelRegion(row, 5).bottom <= 1418
 
     val listRegion = Region(-24, 332, 378, 1091) + supportOffset
     val grandCeListRegion = Region(335, 332,342, 1091) + supportOffset

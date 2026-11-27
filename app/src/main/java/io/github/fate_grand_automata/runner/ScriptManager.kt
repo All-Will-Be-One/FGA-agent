@@ -141,6 +141,31 @@ class ScriptManager @Inject constructor(
         }
     }
 
+    fun launchPartyEditor(reference: Int, progress: (String) -> Unit, done: (Throwable?) -> Unit) {
+        if (!isAutomationPrepared || serviceDestroyed)
+            throw io.github.fga.automation.RpcFailure("RequiresUserConsent", "Prepare FGA capture and accessibility")
+        val reservation = runGate.reserve(ScriptRunGate.Owner.Automation)
+            ?: throw io.github.fga.automation.RpcFailure("Busy", "Native runner is occupied")
+        Thread({
+            var gestures: AccessibilityGestures? = null
+            val result = runCatching {
+                val screenshot = screenshotServiceHolder.screenshotService
+                    ?: error("Screen capture stopped")
+                val component = automationComponentBuilder.screenshotService(screenshot)
+                    .runPreferences(ScriptRunPreferences(preferences)).build()
+                val entry = EntryPoints.get(component, ScriptEntryPoint::class.java)
+                gestures = entry.gestures()
+                entry.partyEditor().rebuild(reference,
+                    { runGate.canPrepare(reservation) && !serviceDestroyed }, progress)
+            }
+            val finish = {
+                if (runGate.finish(reservation)) done(result.exceptionOrNull())
+            }
+            if (gestures?.isInputQuiescent != false) finish()
+            else gestures?.observeQuiescence(finish)
+        }, "FGA-PartyEditor").start()
+    }
+
     init {
         AutomationBridge.attach(this)
     }

@@ -10,6 +10,7 @@ import io.github.fate_grand_automata.accessibility.AccessibilityGestures
 @EntryPoint
 @InstallIn(ScriptComponent::class)
 interface ScriptEntryPoint {
+    fun partyEditor(): io.github.fate_grand_automata.automation.NativePartyEditor
     fun captureDiagnostic(): io.github.fate_grand_automata.automation.NativeCaptureDiagnostic
     fun battle(): AutoBattle
     fun fp(): AutoFriendGacha

@@ -121,6 +121,14 @@ class AccessibilityGestures @Inject constructor(
         }
     }
 
+    /** One continuous stroke for formation drag-and-drop. Some devices cancel the
+     * continued-stroke implementation mid-drag, leaving a lifted card on the screen. */
+    fun dragFormationCard(start: Location, end: Location) = runBlocking {
+        val path = Path().moveTo(start).lineTo(end)
+        performGesture(GestureDescription.StrokeDescription(path, 0, 650L))
+        wait(gesturePrefs.swipeWaitTime)
+    }
+
     override fun swipe(start: Location, end: Location) = runBlocking {
         Timber.d("swipe $start, $end")
 

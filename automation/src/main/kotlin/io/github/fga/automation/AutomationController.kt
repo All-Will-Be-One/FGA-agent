@@ -250,6 +250,7 @@ class AutomationController(
 class RpcDispatcher(private val controller:AutomationController,private val capabilities:()->JsonObject,private val configs:()->JsonObject,
     private val platform:((String,JsonObject)->JsonObject)?=null,
     private val diagnostic:(()->JsonObject)?=null,
+    private val partyEditor:((String,JsonObject)->JsonObject)?=null,
     private val externalPlans:((String,JsonObject)->JsonObject)?=null) {
     fun request(text:String):String = try {
         if(text.toByteArray().size>65536) throw RpcFailure("RequestTooLarge","Request exceeds 64KiB")
@@ -264,6 +265,8 @@ class RpcDispatcher(private val controller:AutomationController,private val capa
             "configs" -> configs()
             "diagnostic.capture" -> diagnostic?.invoke()
                 ?: throw RpcFailure("UnsupportedCapability","Native capture diagnostic is unavailable")
+            "party.rebuild","party.status" -> partyEditor?.invoke(op,q)
+                ?: throw RpcFailure("UnsupportedCapability","Native party editor is unavailable")
             "start" -> controller.snapshotJson(controller.start(s("requestId"),s("configId"),Json.decodeFromJsonElement<RunLimits>(q.getValue("limits")),q["decisionMode"]?.jsonPrimitive?.content ?: "script"))
             "status" -> controller.snapshotJson(controller.status(q["runId"]?.jsonPrimitive?.content,q["requestId"]?.jsonPrimitive?.content))
             "pause","resume","stop" -> controller.snapshotJson(controller.control(s("runId"),s("requestId"),op))

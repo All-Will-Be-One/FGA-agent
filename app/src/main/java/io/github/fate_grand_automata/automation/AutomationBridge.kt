@@ -33,6 +33,45 @@ object AutomationBridge {
     private var externalPlans:ExternalPlanProtocol?=null
     private var frames:ExternalFrameStore?=null
     private var initializationFailure:String?=null
+    @Volatile private var partyJob: PartyJob? = null
+    private data class PartyJob(val requestId: String, val reference: Int,
+        @Volatile var state: String = "Running", @Volatile var step: String = "Starting",
+        @Volatile var error: String? = null)
+    private fun partyRequest(op: String, q: JsonObject): JsonObject {
+        val id = q["requestId"]?.jsonPrimitive?.contentOrNull
+            ?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,80}")) }
+            ?: throw RpcFailure("InvalidRequest", "A bounded requestId is required")
+        if (op == "party.rebuild") {
+            val reference = q["action"]?.jsonObject?.takeIf { it.keys == setOf("referencePreset") }
+                ?.get("referencePreset")?.jsonPrimitive?.intOrNull?.takeIf { it in 1..14 }
+                ?: throw RpcFailure("InvalidRequest", "referencePreset must be a read-only preset from 1 to 14")
+            val previous = partyJob
+            if (previous?.requestId == id && previous.reference != reference)
+                throw RpcFailure("RequestConflict", "Same requestId, different reference preset")
+            if (previous?.requestId != id) {
+                if (executorBusy() || previous?.state == "Running")
+                    throw RpcFailure("Busy", "Native runner is occupied")
+                val runner = manager.get() ?: throw RpcFailure("RequiresUserConsent", "Prepare FGA native capture first")
+                val job = PartyJob(id, reference)
+                partyJob = job
+                try {
+                    runner.launchPartyEditor(reference, { job.step = it }) { error ->
+                        job.error = error?.message
+                        job.state = if (error == null) "Completed" else "Failed"
+                    }
+                } catch (e: Exception) {
+                    partyJob = previous
+                    throw e
+                }
+            }
+        }
+        val job = partyJob?.takeIf { it.requestId == id } ?: throw RpcFailure("NotFound", "Unknown party job")
+        return buildJsonObject {
+            put("requestId", job.requestId); put("referencePreset",job.reference); put("targetPreset",15)
+            put("state",job.state); put("step",job.step)
+            job.error?.let { put("error",it) }
+        }
+    }
 
     @Synchronized fun attach(value:ScriptManager) { manager=WeakReference(value) }
     @Synchronized fun executorBusy():Boolean = ProcessScriptRunGate.gate.currentReservation()!=null ||
@@ -165,6 +204,7 @@ object AutomationBridge {
                     put("externalPlanProtocolVersion",5)
                     put("platformLifecycleVersion",1)
                     put("captureDiagnosticVersion",1)
+                    put("partyRebuildVersion",1)
                     put("decisionModes",JsonArray(listOf("script","smart").map(::JsonPrimitive)))
                     put("externalPlanLimits",buildJsonObject {
                         put("strategyOwner","FGOAgent");put("frameTransformOwner","FGOAgent")
@@ -180,7 +220,7 @@ object AutomationBridge {
                 automationConfigurations(prefs.battleConfigs,{ config ->
                     config.server ?: runCatching {manager.get()?.automationRequest(config.id,1,300)?.server}.getOrNull()
                 },::region)
-            },platform={ op,q -> PlatformLifecycle.request(context,op,q) },externalPlans=::externalRequest,
+            },platform={ op,q -> PlatformLifecycle.request(context,op,q) },externalPlans=::externalRequest, partyEditor=::partyRequest,
                 diagnostic={
                     if(executorBusy()) throw RpcFailure("Busy","Capture diagnostic requires an idle runner")
                     val runner=manager.get() ?: throw RpcFailure("RequiresUserConsent","Prepare the native capture service first")

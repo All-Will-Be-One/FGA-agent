@@ -628,4 +628,11 @@ If your FGO version isn't recognized or runs inside an app cloner, select your s
     <string name="ce_name_sword_saints_of_wandering">Sword Saints of Wandering</string>
     <string name="ce_name_the_chaldean">The Chaldean</string>
     <string name="ce_name_wings_of_manuscript">Wings of Manuscript</string>
+    <string name="support_catalog_import">Import from servant catalog</string>
+    <string name="support_catalog_summary">Search Chaldea names, download Atlas portraits, then match offline</string>
+    <string name="support_catalog_search">Name or number</string>
+    <string name="support_catalog_add">Import and select</string>
+    <string name="support_catalog_retry">Retry</string>
+    <string name="support_catalog_empty">No matching servants</string>
+    <string name="support_catalog_error">Could not load the catalog or portraits. Try again.</string>
 </resources>

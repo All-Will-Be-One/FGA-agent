@@ -15,6 +15,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -30,6 +33,7 @@ import io.github.fate_grand_automata.R
 import io.github.fate_grand_automata.prefs.core.Pref
 import io.github.fate_grand_automata.prefs.core.SupportPrefsCore
 import io.github.fate_grand_automata.scripts.enums.BondCEEffectEnum
+import io.github.fate_grand_automata.supportcatalog.SupportServantStore
 import io.github.fate_grand_automata.ui.Heading
 import io.github.fate_grand_automata.ui.OnResume
 import io.github.fate_grand_automata.ui.icon
@@ -43,6 +47,7 @@ import io.github.fate_grand_automata.util.SupportNameResources.getLocalizedServa
 import io.github.fate_grand_automata.util.stringRes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun PreferredSupportScreen(
@@ -83,8 +88,21 @@ private fun PreferredSupport(
     // so doing it inline re-ran on every recomposition of this screen — including on every
     // toggle in the multi-select dialogs. Keyed on the configuration so that a locale change
     // still re-resolves the names.
-    val servantEntries = remember(vm.servants, configuration) {
-        vm.servants.mapValues { (name, _) -> getLocalizedServantName(context, name) }
+    var showCatalog by remember { mutableStateOf(false) }
+    var imports by remember { mutableIntStateOf(0) }
+    val region = SupportServantStore.region(configuration.locales[0])
+    val importedEntries by produceState(emptyMap<String, String>(), region, imports) {
+        value = withContext(Dispatchers.IO) { SupportServantStore.inApp(context.filesDir).names(region) }
+    }
+    val servantEntries = remember(vm.servants, configuration, importedEntries) {
+        vm.servants.mapValues { (name, _) -> getLocalizedServantName(context, name) } + importedEntries
+    }
+    if (showCatalog) {
+        ImportCatalogServantDialog(onDismiss = { showCatalog = false }) { key ->
+            config.preferredServants.set(config.preferredServants.get() + key)
+            imports++
+            showCatalog = false
+        }
     }
     val ceEntries = remember(vm.ces, configuration) {
         vm.ces.mapValues { (_, displayName) -> getLocalizedCEName(context, displayName) }
@@ -115,6 +133,12 @@ private fun PreferredSupport(
                     config.preferredServants.SupportSelectPreference(
                         title = stringResource(R.string.p_battle_config_support_pref_servants),
                         entries = servantEntries
+                    )
+
+                    Preference(
+                        title = stringResource(R.string.support_catalog_import),
+                        summary = stringResource(R.string.support_catalog_summary),
+                        onClick = { showCatalog = true }
                     )
 
                     if (prefServants.isNotEmpty()) {

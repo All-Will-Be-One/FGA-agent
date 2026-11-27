@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -54,6 +55,9 @@ import io.github.fate_grand_automata.ui.prefs.SwitchPreference
 import io.github.fate_grand_automata.ui.prefs.remember
 import io.github.fate_grand_automata.util.SupportNameResources.getLocalizedCEName
 import io.github.fate_grand_automata.util.SupportNameResources.getLocalizedServantName
+import io.github.fate_grand_automata.supportcatalog.SupportServantStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import io.github.fate_grand_automata.util.stringRes
 import java.io.File
 
@@ -250,8 +254,12 @@ fun PreferredSummary(
     // Kept out of the recomposition path for the same reason as in PreferredSupportScreen:
     // `Set` is unstable to the Compose compiler, so this composable recomposes readily and
     // would otherwise re-localize and re-join both lists every time.
-    val servantText = remember(servants, configuration) {
-        servants.joinToString { getLocalizedServantName(context, it) }
+    val region = SupportServantStore.region(configuration.locales[0])
+    val servantText by produceState("", servants, configuration, region) {
+        value = withContext(Dispatchers.IO) {
+            val store = SupportServantStore.inApp(context.filesDir)
+            servants.joinToString { store.label(it, region) ?: getLocalizedServantName(context, it) }
+        }
     }
     val ceText = remember(ces, configuration) {
         ces.joinToString { getLocalizedCEName(context, it) }

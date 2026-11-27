@@ -39,6 +39,19 @@ FGA/
         └── my-friend.png
 ```
 
+## Import a preferred Servant by name
+
+In the battle configuration, open **Preferred Support → Import from servant catalog**.
+Search by name or number, select the Servant, and tap **Import and select**. Names come from
+Chaldea and Atlas Academy. Face images come from Atlas Academy. The list's collection number
+is for reference; the saved entry uses the unique Atlas servant ID. Ascension and costume
+portraits belong to that same entry. Reimporting updates the pictures for that same ID.
+
+Only the import dialog uses the network. Matching uses local templates, and existing Support
+Image Maker templates are not changed. Catalog portraits are stored in the app, not in the
+manual support image directory. After moving a config to another phone, reimport its catalog
+Servants there before use. Use the Image Maker if a regional or special portrait does not match.
+
 ## Creating images
 
 You can use the Support selection screen, or the Friend List, where you don't have to refresh until the Servant shows up.

@@ -11,6 +11,8 @@ import io.github.fate_grand_automata.IStorageProvider
 import io.github.fate_grand_automata.SupportImageKind
 import io.github.fate_grand_automata.prefs.core.PrefsCore
 import io.github.fate_grand_automata.scripts.enums.GameServer
+import io.github.fate_grand_automata.supportcatalog.CatalogServant
+import io.github.fate_grand_automata.supportcatalog.SupportServantStore
 import io.github.lib_automata.Pattern
 import timber.log.Timber
 import java.io.File
@@ -140,6 +142,12 @@ class StorageProvider @Inject constructor(
         supportImageWriter(kind).write(name)
 
     override fun readSupportImage(kind: SupportImageKind, name: String): List<InputStream> {
+        if (kind == SupportImageKind.Servant) {
+            CatalogServant.idFromKey(name)?.let { id ->
+                val portraits = SupportServantStore.inApp(context.filesDir).read(id)
+                if (portraits.isNotEmpty()) return portraits.map { it.inputStream() }
+            }
+        }
         val file = kind.imageFolder.findFile(name)
             ?: throw KnownException(
                 KnownException.Reason.CouldNotOpenSupportFileForReading(kind, name)

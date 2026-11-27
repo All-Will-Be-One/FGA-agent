@@ -626,4 +626,11 @@
     <string name="update_download_success">"下载成功。5秒后将重启APP。"</string>
     <string name="wait_ap_regen_toast_message">"等待体力回复中，%d 分钟后再次检查"</string>
     <string name="withdraw_disabled">"无设定撤退且从者全灭"</string>
+    <string name="support_catalog_import">从从者图鉴导入</string>
+    <string name="support_catalog_summary">用 Chaldea 名称搜索，下载 Atlas 头像，助战识别离线运行</string>
+    <string name="support_catalog_search">从者名称或编号</string>
+    <string name="support_catalog_add">导入并选中</string>
+    <string name="support_catalog_retry">重试</string>
+    <string name="support_catalog_empty">没有匹配的从者</string>
+    <string name="support_catalog_error">无法加载从者图鉴或头像，请重试。</string>
 </resources>

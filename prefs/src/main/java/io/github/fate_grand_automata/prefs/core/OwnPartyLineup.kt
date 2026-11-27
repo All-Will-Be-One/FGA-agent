@@ -22,13 +22,14 @@ enum class EquipmentAction { Keep, Remove, Equip }
 data class OwnPartyEquipment(
     val action: EquipmentAction = EquipmentAction.Keep,
     val id: Int? = null,
-    val names: Map<String, String> = emptyMap()
+    val names: Map<String, String> = emptyMap(),
+    val requireMaxLimitBreak: Boolean = false
 ) {
     init {
         if (action == EquipmentAction.Equip) {
             require(id != null && id > 0 && names.isNotEmpty() && names.values.none(String::isBlank))
         } else {
-            require(id == null && names.isEmpty())
+            require(id == null && names.isEmpty() && !requireMaxLimitBreak)
         }
     }
 

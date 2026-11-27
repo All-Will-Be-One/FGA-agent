@@ -656,4 +656,8 @@ If your FGO version isn't recognized or runs inside an app cloner, select your s
     <string name="agent_party_ce_keep">Keep equipped</string>
     <string name="agent_party_ce_remove">Unequip</string>
     <string name="agent_party_ce_filter_hint">For event equipment, try the game’s Event Bonus filter first, then verify the exact Craft Essence. Automatic in-game changes are not yet enabled.</string>
+    <string name="agent_party_ce_require_max">Require max limit break</string>
+    <string name="agent_party_ce_limit_compatibility">If not required, a max limit broken copy can replace a normal copy of the same Craft Essence.</string>
+    <string name="agent_party_ce_save_requirement">Save limit break requirement</string>
+    <string name="agent_party_ce_summary_max">%1$s (max limit break required)</string>
 </resources>

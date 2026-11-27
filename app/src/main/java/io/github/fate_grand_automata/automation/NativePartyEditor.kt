@@ -17,7 +17,8 @@ import javax.inject.Inject
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.runBlocking
-import timber.log.Timber
+import io.github.fate_grand_automata.scripts.modules.AgentEquipmentCompatibility
+import io.github.fate_grand_automata.scripts.modules.AgentLimitBreak
 
 /**
  * Formation-only JP editor. Its sole write target is XV. It observes the reference preset
@@ -158,19 +159,16 @@ class NativePartyEditor @Inject constructor(
     private data class Member(
         val slot: Int,
         val portrait: Pattern,
-        val stats: Pattern,
         val essences: List<Pattern>,
         val previewName: Pattern?,
-        val previewAtk: Pattern?,
-        val previewCost: Pattern?
+        val previewEffect: Pattern?,
+        val limitBreak: AgentLimitBreak?
     ) : AutoCloseable {
         override fun close() {
             portrait.close()
-            stats.close()
             essences.forEach { it.close() }
             previewName?.close()
-            previewAtk?.close()
-            previewCost?.close()
+            previewEffect?.close()
         }
     }
 
@@ -184,10 +182,9 @@ class NativePartyEditor @Inject constructor(
             await("portrait at reference position ${slot + 1}") { formation() && party() == preset }.use { view ->
                 if (view.emptySlot(slot)) return@use
                 val portrait = view.crop(portraitBox(slot))
-                val stats = view.crop(box(centers[slot] - 24, 361, 82, 40))
                 // Independently compare three horizontal bands; the picker adds level/cost text.
                 if (view.unequipped(slot)) {
-                    members += Member(slot, portrait, stats, emptyList(), null, null, null)
+                    members += Member(slot, portrait, emptyList(), null, null, null)
                     return@use
                 }
                 val art = listOf(284, 294, 303).map { y -> view.crop(box(centers[slot] - 28, y, 56, 20)) }
@@ -195,10 +192,10 @@ class NativePartyEditor @Inject constructor(
                 await("reference Craft Essence opens") { equipment() }.close()
                 Thread.sleep(550)
                 await("stable reference Craft Essence details") { equipment() }.use { picker ->
-                    members += Member(slot, portrait, stats, art,
-                        picker.crop(box(302, 132, 240, 27)),
-                        picker.crop(box(880, 150, 68, 19)),
-                        picker.crop(box(769, 197, 57, 21)))
+                    members += Member(slot, portrait, art,
+                        picker.crop(box(302, 132, 415, 27)),
+                        picker.crop(box(304, 163, 418, 64)),
+                        limitBreak(picker))
                 }
                 tap(126, 29)  // close, never confirm on the read-only preset
                 await("reference formation after inspection") { formation() && party() == preset }.close()
@@ -213,9 +210,7 @@ class NativePartyEditor @Inject constructor(
     private fun rosterMatches(f: Pattern, members: List<Member>, support: Int): Boolean {
         val empty = centers.indices.filter { i -> i != support && members.none { it.slot == i } }
         return f.support() == support && empty.all { f.emptySlot(it) } && members.all { m ->
-            portraitMatches(f, m) &&
-                f.match(m.stats, box(centers[m.slot] - 30, 355, 94, 52), .979) != null &&
-                if (m.essences.isEmpty()) f.unequipped(m.slot)
+            portraitMatches(f, m) && if (m.essences.isEmpty()) f.unequipped(m.slot)
                 else m.essences.count { f.match(it, ceBox(m.slot), .92) != null } >= 2
         }
     }
@@ -292,12 +287,30 @@ class NativePartyEditor @Inject constructor(
         fail("Could not uniquely identify the reference servant for slot ${m.slot + 1}")
     }
 
-    private fun previewMatches(f: Pattern, m: Member): Boolean {
-        val name = f.match(requireNotNull(m.previewName), box(298, 128, 248, 35), .0)?.first ?: 0.0
-        val atk = f.match(requireNotNull(m.previewAtk), box(875, 146, 77, 26), .0)?.first ?: 0.0
-        val cost = f.match(requireNotNull(m.previewCost), box(765, 192, 65, 30), .0)?.first ?: 0.0
-        Timber.d("Party preview slot=${m.slot + 1} name=$name atk=$atk cost=$cost")
-        return name >= .96 && atk >= .94 && cost >= .94
+    private fun limitBreak(f: Pattern): AgentLimitBreak? {
+        val text = box(296, 162, 443, 69)
+        val stamp = template("max-limit")
+        var best = 0.0
+        for (factor in listOf(.76, .80, .84, .88, .91, .94, .97, 1.0, 1.04, 1.08, 1.12, 1.16)) {
+            val score = stamp.resize(Size((stamp.width * factor).roundToInt(), (stamp.height * factor).roundToInt()))
+                .use { f.match(it, text, .0)?.first ?: 0.0 }
+            best = maxOf(best, score)
+            if (best >= .83) return AgentLimitBreak.Max
+        }
+        return if (best < .62) AgentLimitBreak.Normal else null
+    }
+
+    private fun previewMatches(f: Pattern, m: Member, allowUpgrade: Boolean): Boolean {
+        if (f.match(requireNotNull(m.previewName), box(298, 128, 423, 35), .975) == null) return false
+        // Level/HP/ATK are not part of identity. Identical effect text can corroborate
+        // an unreadable marker, but never overrule an observed max → normal mismatch.
+        val observed = limitBreak(f)
+        val required = m.limitBreak
+        val sameEffect = f.match(requireNotNull(m.previewEffect), box(301, 161, 424, 69), .986) != null
+        if (required != null && observed != null)
+            return AgentEquipmentCompatibility.accepts(required, observed, allowUpgrade) &&
+                (required != observed || sameEffect)
+        return sameEffect || (allowUpgrade && observed == AgentLimitBreak.Max)
     }
 
     private fun chooseEquipment(m: Member) {
@@ -308,41 +321,66 @@ class NativePartyEditor @Inject constructor(
         tap(centers[m.slot], 313)
         val wasEvent = await("Craft Essence Selection") { equipment() }.use { ceFilterEvent(it) }
         try {
-            selectTab()
-            for (eventOnly in listOf(true, false)) {
-                if (!eventOnly) toggleFilter(false)
-                resetScroll(true)
-                repeat(if (eventOnly) 6 else 38) { page ->
-                    val options = await("Craft Essence inventory") { equipment() }.use { candidates(it, m.essences, true) }
-                    for (candidate in options) {
-                        // Equipped copies are not transferable: neither this flag nor an
-                        // unexpected confirmation after the chooser may be bypassed.
-                        val occupied = frame().use {
-                            !it.equipment() || it.has("equipped",
-                                box(candidate.x - 37, (candidate.y - 10).coerceAtLeast(248), 74, 51), .81)
+            val passes = if (m.limitBreak == AgentLimitBreak.Max) listOf(false) else listOf(false, true)
+            for (upgrade in passes) {
+                for (eventOnly in listOf(true, false)) {
+                    if (eventOnly) selectTab() else toggleFilter(false)
+                    resetScroll(true)
+                    var previousGrid: Pattern? = null
+                    try {
+                        for (page in 0 until if (eventOnly) 6 else 38) {
+                            val options = await("Craft Essence inventory") { equipment() }.use { f ->
+                                val grid = box(177, 251, 759, 229)
+                                // Stop at the end of a short or exhausted result list. Preview
+                                // selection can tint one card, so require a neighboring swipe too.
+                                if (previousGrid?.let { f.match(it, grid, .997) != null } == true) return@use null
+                                previousGrid?.close()
+                                previousGrid = f.crop(grid)
+                                candidates(f, m.essences, true)
+                            } ?: break
+                            for (candidate in options) {
+                                val occupied = frame().use {
+                                    !it.equipment() || it.has("equipped",
+                                        box(candidate.x - 37, (candidate.y - 10).coerceAtLeast(248), 74, 51), .81)
+                                }
+                                if (occupied) continue
+                                tap(candidate.x, candidate.y)
+                                Thread.sleep(530)
+                                if (!frame().use { it.equipment() && previewMatches(it, m, upgrade) }) continue
+                                restoreFilter(wasEvent)
+                                if (!frame().use { it.equipment() && previewMatches(it, m, upgrade) })
+                                    fail("Craft Essence selection reset on filter restore at slot ${m.slot + 1}")
+                                tap(888, 208)
+                                await("XV equipped slot ${m.slot + 1}; transfers forbidden") {
+                                    formation() && party() == 15 &&
+                                        m.essences.count { match(it, ceBox(m.slot), .92) != null } >= 2
+                                }.close()
+                                return
+                            }
+                            report("searching Craft Essence ${m.slot + 1}, event=$eventOnly, upgrade=$upgrade, page=${page + 1}")
+                            scroll(true)
                         }
-                        if (occupied) continue
-                        tap(candidate.x, candidate.y)
-                        Thread.sleep(530)
-                        val correct = frame().use { it.equipment() && previewMatches(it, m) }
-                        if (!correct) continue
-                        restoreFilter(wasEvent)
-                        // Changing filter may reset the pending candidate; verify after it.
-                        if (!frame().use { it.equipment() && previewMatches(it, m) })
-                            fail("Craft Essence selection reset on filter restore at slot ${m.slot + 1}")
-                        tap(888, 208)
-                        await("XV equipped slot ${m.slot + 1}; transfers forbidden") {
-                            formation() && party() == 15 &&
-                                m.essences.count { match(it, ceBox(m.slot), .92) != null } >= 2
-                        }.close()
-                        return
-                    }
-                    report("searching Craft Essence ${m.slot + 1}, event=$eventOnly, page ${page + 1}, candidates=${options.size}")
-                    scroll(true)
+                    } finally { previousGrid?.close() }
                 }
             }
         } finally { restoreFilter(wasEvent) }
-        fail("Could not find an unassigned Craft Essence matching reference identity and stats for slot ${m.slot + 1}")
+        fail("Could not find an unassigned same-name Craft Essence with compatible limit break for slot ${m.slot + 1}")
+    }
+
+    private fun savedEquipmentMatches(members: List<Member>): Boolean {
+        for (m in members.filter { it.essences.isNotEmpty() }) {
+            await("XV before reading saved equipment") { formation() && party() == 15 }.close()
+            tap(centers[m.slot], 313)
+            await("saved Craft Essence opens") { equipment() }.close()
+            Thread.sleep(550)
+            val matches = await("stable saved Craft Essence details") { equipment() }.use {
+                previewMatches(it, m, true)
+            }
+            tap(126, 29)
+            await("XV after reading saved equipment") { formation() && party() == 15 }.close()
+            if (!matches) return false
+        }
+        return true
     }
 
     fun rebuild(reference: Int, canContinue: () -> Boolean, progress: (String) -> Unit) {
@@ -359,7 +397,7 @@ class NativePartyEditor @Inject constructor(
             val support = captureReference(reference, members)
             goTo(15)
             if (members.count { it.slot < 3 } != 2) fail("Reference needs two owned starters and one support slot")
-            if (frame().use { rosterMatches(it, members, support) }) {
+            if (frame().use { rosterMatches(it, members, support) } && savedEquipmentMatches(members)) {
                 report("XV already matches; no reconstruction performed")
                 return
             }
@@ -434,6 +472,9 @@ class NativePartyEditor @Inject constructor(
             await("reopened XV matching ordered servants and Craft Essences") {
                 formation() && party() == 15 && rosterMatches(this, members, support)
             }.close()
+            report("rechecking saved Craft Essence names and limit breaks")
+            if (!savedEquipmentMatches(members))
+                fail("Reopened XV has an incorrect Craft Essence name or limit break")
             report("checking original preset $reference was not altered")
             goTo(reference)
             await("read-only reference still matches original captured lineup") {

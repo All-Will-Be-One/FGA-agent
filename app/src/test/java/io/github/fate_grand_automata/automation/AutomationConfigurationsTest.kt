@@ -30,7 +30,7 @@ class AutomationConfigurationsTest {
         assertEquals("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",rows[1].jsonObject.getValue("scriptSha256").jsonPrimitive.content)
     }
     @Test fun `bridge describes event-first exact CE intent without claiming in-game editing`() {
-        val config = config("event", listOf(AgentPartyMemberPlan(2, 504500, AgentEquipmentAction.Equip, 9400010))) { "" }
+        val config = config("event", listOf(AgentPartyMemberPlan(2, 504500, AgentEquipmentAction.Equip, 9400010, true))) { "" }
         val party = automationConfigurations(listOf(config), { it.server }, { "JP" })
             .getValue("configs").jsonArray.single().jsonObject.getValue("agentParty").jsonObject
         assertEquals(15, party.getValue("preset").jsonPrimitive.int)
@@ -38,6 +38,7 @@ class AutomationConfigurationsTest {
         val equip = party.getValue("lineup").jsonArray.single().jsonObject.getValue("equipment").jsonObject
         assertEquals(9400010, equip.getValue("craftEssenceId").jsonPrimitive.int)
         assertEquals("EventBonusFirst", equip.getValue("filterPolicy").jsonPrimitive.content)
+        assertTrue(equip.getValue("requireMaxLimitBreak").jsonPrimitive.boolean)
     }
 
     @Test fun `real runner dispatch config access does not read unused skill commands`() {

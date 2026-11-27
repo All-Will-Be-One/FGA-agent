@@ -36,6 +36,7 @@ internal fun automationConfigurations(configs:List<IBattleConfig>,resolveServer:
                                     if (member.equipmentAction == AgentEquipmentAction.Equip) {
                                         member.craftEssenceId?.let { put("craftEssenceId", it) }
                                         put("filterPolicy", AgentEquipmentFilter.EventBonusFirst.name)
+                                        put("requireMaxLimitBreak", member.requireMaxLimitBreak)
                                     }
                                 }
                             })

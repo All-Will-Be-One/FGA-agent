@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -59,6 +60,7 @@ internal fun OwnPartyLineupPreference(config: BattleConfigCore) {
     val ceSlot = equipmentSlot
     val ceMember = ceSlot?.let(lineup.slots::get)
     if (ceSlot != null && ceMember != null) {
+        var needMax by remember(ceSlot, ceMember.id) { mutableStateOf(ceMember.equipment.requireMaxLimitBreak) }
         fun updateEquipment(choice: OwnPartyEquipment) {
             draft = lineup.withMember(ceSlot, ceMember.copy(equipment = choice))
             equipmentSlot = null
@@ -71,7 +73,7 @@ internal fun OwnPartyLineupPreference(config: BattleConfigCore) {
                 confirmLabel = R.string.own_party_select,
                 onDismiss = { searchingEquipment = false },
                 kind = CatalogKind.CraftEssence,
-                onSelected = { ce -> updateEquipment(OwnPartyEquipment(EquipmentAction.Equip, ce.id, ce.names)) }
+                onSelected = { ce -> updateEquipment(OwnPartyEquipment(EquipmentAction.Equip, ce.id, ce.names, needMax)) }
             )
         } else {
             AlertDialog(
@@ -80,6 +82,18 @@ internal fun OwnPartyLineupPreference(config: BattleConfigCore) {
                 text = {
                     Column {
                         Text(stringResource(R.string.agent_party_ce_filter_hint))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = needMax, onCheckedChange = { needMax = it })
+                            Text(stringResource(R.string.agent_party_ce_require_max))
+                        }
+                        Text(stringResource(R.string.agent_party_ce_limit_compatibility))
+                        if (ceMember.equipment.action == EquipmentAction.Equip &&
+                            needMax != ceMember.equipment.requireMaxLimitBreak
+                        ) {
+                            TextButton(onClick = { updateEquipment(ceMember.equipment.copy(requireMaxLimitBreak = needMax)) }) {
+                                Text(stringResource(R.string.agent_party_ce_save_requirement))
+                            }
+                        }
                         TextButton(onClick = { updateEquipment(OwnPartyEquipment()) }) {
                             Text(stringResource(R.string.agent_party_ce_keep))
                         }
@@ -156,7 +170,11 @@ internal fun OwnPartyLineupPreference(config: BattleConfigCore) {
                                     val label = when (equipment.action) {
                                         EquipmentAction.Keep -> stringResource(R.string.agent_party_ce_keep)
                                         EquipmentAction.Remove -> stringResource(R.string.agent_party_ce_remove)
-                                        EquipmentAction.Equip -> equipment.label(region).orEmpty()
+                                        EquipmentAction.Equip -> equipment.label(region).orEmpty().let {
+                                            if (equipment.requireMaxLimitBreak)
+                                                stringResource(R.string.agent_party_ce_summary_max, it)
+                                            else it
+                                        }
                                     }
                                     TextButton(onClick = { equipmentSlot = position }) {
                                         Text(stringResource(R.string.agent_party_ce_summary, label))

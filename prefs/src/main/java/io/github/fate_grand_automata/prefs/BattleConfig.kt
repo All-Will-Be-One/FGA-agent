@@ -30,7 +30,7 @@ internal class BattleConfig(
     override val ownPartyPlan: List<AgentPartyMemberPlan>
         get() = prefs.ownPartyLineup.get().slots.toSortedMap().map { (position, member) ->
             AgentPartyMemberPlan(position, member.id, AgentEquipmentAction.valueOf(member.equipment.action.name),
-                member.equipment.id)
+                member.equipment.id, member.equipment.requireMaxLimitBreak)
         }
     override val materials by prefs.materials
 

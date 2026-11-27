@@ -34,9 +34,19 @@ data class AgentPartyMemberPlan(
     val position: Int,
     val servantId: Int,
     val equipmentAction: AgentEquipmentAction,
-    val craftEssenceId: Int?
+    val craftEssenceId: Int?,
+    val requireMaxLimitBreak: Boolean = false
 )
 
 enum class AgentEquipmentAction { Keep, Remove, Equip }
 
 enum class AgentEquipmentFilter { EventBonusFirst }
+
+/** Max limit break can satisfy a normal request, but never the other way around. */
+enum class AgentLimitBreak { Normal, Max }
+
+object AgentEquipmentCompatibility {
+    fun accepts(required: AgentLimitBreak, observed: AgentLimitBreak, allowUpgrade: Boolean): Boolean =
+        required == observed ||
+            (allowUpgrade && required == AgentLimitBreak.Normal && observed == AgentLimitBreak.Max)
+}

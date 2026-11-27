@@ -14,3 +14,9 @@ Do not retry an interrupted edit against an unrecognized screen: return to the
 normal Party XV formation page and inspect its state first. The setup copy, if
 used as an acceptance fixture, is not part of this RPC. This route does not
 change the Master's Mystic Code or choose a borrowed support servant.
+
+Craft Essence matching uses the exact displayed name and limit break, not level
+or HP/ATK. Search ordinary copies first when the reference is ordinary. If one
+cannot be found, a positively identified max limit broken copy is permitted.
+An ordinary copy never substitutes for a required max limit broken copy.
+After reopening XV, read each equipped Craft Essence's details again.

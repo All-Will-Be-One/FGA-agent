@@ -40,7 +40,7 @@ class OwnPartyLineupTest {
 
     @Test
     fun `equipment plan preserves keep remove and exact equip across serialization`() {
-        val explicit = OwnPartyEquipment(EquipmentAction.Equip, 9400010, mapOf("CN" to "顽强"))
+        val explicit = OwnPartyEquipment(EquipmentAction.Equip, 9400010, mapOf("CN" to "顽强"), requireMaxLimitBreak = true)
         val lineup = OwnPartyLineup()
             .withMember(1, caster)
             .withMember(3, berserker.copy(equipment = explicit))
@@ -49,6 +49,7 @@ class OwnPartyLineupTest {
         assertEquals(EquipmentAction.Keep, restored.slots[1]?.equipment?.action)
         assertEquals(9400010, restored.slots[3]?.equipment?.id)
         assertEquals("顽强", restored.slots[3]?.equipment?.label("CN"))
+        assertEquals(true, restored.slots[3]?.equipment?.requireMaxLimitBreak)
         assertEquals(EquipmentAction.Remove, restored.slots[6]?.equipment?.action)
         assertFailsWith<IllegalArgumentException> { OwnPartyEquipment(EquipmentAction.Equip) }
         assertFailsWith<IllegalArgumentException> { OwnPartyEquipment(EquipmentAction.Remove, 9400010) }

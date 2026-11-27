@@ -1,5 +1,7 @@
 package io.github.fate_grand_automata.supportcatalog
 
+import io.github.fate_grand_automata.prefs.core.EquipmentAction
+import io.github.fate_grand_automata.prefs.core.OwnPartyEquipment
 import io.github.fate_grand_automata.prefs.core.OwnPartyLineup
 import io.github.fate_grand_automata.prefs.core.OwnPartyMember
 import kotlinx.serialization.json.Json
@@ -34,6 +36,29 @@ class OwnPartyLineupTest {
         assertEquals("Altria Caster", changed.slots[2]?.label("NA"))
         assertEquals(start.slots[2]?.id, changed.slots[2]?.id)
         assertEquals(OwnPartyLineup(), changed.withMember(2, null))
+    }
+
+    @Test
+    fun `equipment plan preserves keep remove and exact equip across serialization`() {
+        val explicit = OwnPartyEquipment(EquipmentAction.Equip, 9400010, mapOf("CN" to "顽强"))
+        val lineup = OwnPartyLineup()
+            .withMember(1, caster)
+            .withMember(3, berserker.copy(equipment = explicit))
+            .withMember(6, OwnPartyMember(604200, mapOf("CN" to "杀狐"), OwnPartyEquipment(EquipmentAction.Remove)))
+        val restored = Json.decodeFromString<OwnPartyLineup>(Json.encodeToString(lineup))
+        assertEquals(EquipmentAction.Keep, restored.slots[1]?.equipment?.action)
+        assertEquals(9400010, restored.slots[3]?.equipment?.id)
+        assertEquals("顽强", restored.slots[3]?.equipment?.label("CN"))
+        assertEquals(EquipmentAction.Remove, restored.slots[6]?.equipment?.action)
+        assertFailsWith<IllegalArgumentException> { OwnPartyEquipment(EquipmentAction.Equip) }
+        assertFailsWith<IllegalArgumentException> { OwnPartyEquipment(EquipmentAction.Remove, 9400010) }
+    }
+
+    @Test
+    fun `older saved lineups default to keeping the current equipment`() {
+        val prior = """{"slots":{"1":{"id":504500,"names":{"CN":"术呆"}}}}"""
+        val restored = Json.decodeFromString<OwnPartyLineup>(prior)
+        assertEquals(EquipmentAction.Keep, restored.slots[1]?.equipment?.action)
     }
 
     @Test

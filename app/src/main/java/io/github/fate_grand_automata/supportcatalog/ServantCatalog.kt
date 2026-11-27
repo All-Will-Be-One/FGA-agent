@@ -37,31 +37,40 @@ private data class BasicServant(
     val collectionNo: Int,
     val name: String,
     val originalName: String = name,
-    val className: String,
+    val className: String = "",
     val type: String
 )
 
+internal enum class CatalogKind(val export: String, val translations: String, val types: Set<String>) {
+    Servant("servant", "svt_names", setOf("normal", "heroine")),
+    CraftEssence("equip", "ce_names", setOf("servantEquip"))
+}
+
 internal object ServantCatalog {
     private const val ATLAS = "https://api.atlasacademy.io"
-    private const val CHALDEA = "https://raw.githubusercontent.com/chaldea-center/chaldea-data/main/mappings/svt_names.json"
+    private const val CHALDEA = "https://raw.githubusercontent.com/chaldea-center/chaldea-data/main/mappings"
 
     // Opening one picker per team position should not redownload the same public index.
-    private var cached: List<CatalogServant>? = null
-    private var expiresAtNanos = 0L
+    private data class Snapshot(val entries: List<CatalogServant>, val expiresAtNanos: Long)
+    private val cached = mutableMapOf<CatalogKind, Snapshot>()
 
     @Synchronized
-    fun fetch(): List<CatalogServant> {
-        cached?.takeIf { System.nanoTime() - expiresAtNanos < 0L }?.let { return it }
-        val jp = getRequired("$ATLAS/export/JP/basic_servant.json")
-        val cn = optional { getRequired("$ATLAS/export/CN/basic_servant.json") }
-        val translated = optional { getRequired(CHALDEA) }
-        return parse(jp, cn, translated).also {
-            cached = it
-            expiresAtNanos = System.nanoTime() + java.util.concurrent.TimeUnit.MINUTES.toNanos(10)
+    fun fetch(kind: CatalogKind = CatalogKind.Servant): List<CatalogServant> {
+        cached[kind]?.takeIf { System.nanoTime() - it.expiresAtNanos < 0L }?.let { return it.entries }
+        val jp = getRequired("$ATLAS/export/JP/basic_${kind.export}.json")
+        val cn = optional { getRequired("$ATLAS/export/CN/basic_${kind.export}.json") }
+        val translated = optional { getRequired("$CHALDEA/${kind.translations}.json") }
+        return parse(jp, cn, translated, kind).also {
+            cached[kind] = Snapshot(it, System.nanoTime() + java.util.concurrent.TimeUnit.MINUTES.toNanos(10))
         }
     }
 
-    fun parse(jp: String, cn: String?, translations: String?): List<CatalogServant> {
+    fun parse(
+        jp: String,
+        cn: String?,
+        translations: String?,
+        kind: CatalogKind = CatalogKind.Servant
+    ): List<CatalogServant> {
         val chinese = cn?.let { catalogJson.decodeFromString<List<BasicServant>>(it) }
             .orEmpty().associateBy { it.id }
         val names = translations?.let {
@@ -69,7 +78,7 @@ internal object ServantCatalog {
         }.orEmpty()
         return catalogJson.decodeFromString<List<BasicServant>>(jp)
             .asSequence()
-            .filter { it.id > 0 && it.collectionNo > 0 && it.type in setOf("normal", "heroine") }
+            .filter { it.id > 0 && it.collectionNo > 0 && it.type in kind.types }
             .distinctBy { it.id }
             .map { servant ->
                 val translationsForServant = names[servant.originalName] ?: names[servant.name].orEmpty()

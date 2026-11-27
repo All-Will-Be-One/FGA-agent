@@ -641,4 +641,17 @@
     <string name="own_party_back_slot">后排 %1$d 号位</string>
     <string name="own_party_unset">未配置</string>
     <string name="own_party_save">保存</string>
+    <string name="agent_party_reserved_label">15 · Agent</string>
+    <string name="agent_party_reservation_hint">1–14 号可手选，15 号专供 Agent 使用。</string>
+    <string name="agent_party_reserved_error">15 号编队专供 Agent 使用，请选择 1–14 号。</string>
+    <string name="agent_party_unverified">无法确认已选中 15 号编队，Agent 未开始下一次战斗。</string>
+    <string name="agent_party_editor_required">计划需要调整从者或礼装。Agent 尚不能核验这些改动，已在开打前停止。</string>
+    <string name="agent_party_ce">礼装</string>
+    <string name="agent_party_ce_summary">礼装：%1$s</string>
+    <string name="agent_party_ce_empty">没有匹配的礼装</string>
+    <string name="agent_party_ce_search">礼装名称或编号</string>
+    <string name="agent_party_ce_choose">选择礼装</string>
+    <string name="agent_party_ce_keep">保持原样</string>
+    <string name="agent_party_ce_remove">卸下礼装</string>
+    <string name="agent_party_ce_filter_hint">活动礼装优先使用游戏内的「活动加成」筛选，再核对具体礼装。暂未启用自动换装。</string>
 </resources>

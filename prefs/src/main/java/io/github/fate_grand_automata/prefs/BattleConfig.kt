@@ -3,6 +3,8 @@ package io.github.fate_grand_automata.prefs
 import io.github.fate_grand_automata.prefs.core.BattleConfigCore
 import io.github.fate_grand_automata.prefs.core.PrefsCore
 import io.github.fate_grand_automata.prefs.core.map
+import io.github.fate_grand_automata.scripts.modules.AgentEquipmentAction
+import io.github.fate_grand_automata.scripts.modules.AgentPartyMemberPlan
 import io.github.fate_grand_automata.scripts.prefs.IBattleConfig
 
 internal class BattleConfig(
@@ -25,6 +27,11 @@ internal class BattleConfig(
     override val useChainPriority get() = prefs.useChainPriority.get()
 
     override val party by prefs.party
+    override val ownPartyPlan: List<AgentPartyMemberPlan>
+        get() = prefs.ownPartyLineup.get().slots.toSortedMap().map { (position, member) ->
+            AgentPartyMemberPlan(position, member.id, AgentEquipmentAction.valueOf(member.equipment.action.name),
+                member.equipment.id)
+        }
     override val materials by prefs.materials
 
     override val shuffleCards by prefs.shuffleCards

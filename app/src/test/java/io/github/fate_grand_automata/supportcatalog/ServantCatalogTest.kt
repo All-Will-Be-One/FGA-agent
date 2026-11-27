@@ -15,6 +15,20 @@ class ServantCatalogTest {
     lateinit var directory: File
 
     @Test
+    fun `craft essence catalog uses CE IDs and tolerates the absent class field`() {
+        val jp = """[
+          {"id":9400010,"collectionNo":1,"name":"頑強","type":"servantEquip"},
+          {"id":504500,"collectionNo":284,"name":"術","className":"caster","type":"normal"}
+        ]"""
+        val cn = """[{"id":9400010,"collectionNo":1,"name":"顽强","type":"servantEquip"}]"""
+        val ce = ServantCatalog.parse(jp, cn, null, CatalogKind.CraftEssence).single()
+        assertEquals(9400010, ce.id)
+        assertEquals("顽强", ce.label("CN"))
+        assertEquals("", ce.className)
+        assertTrue(ce.matches("顽强"))
+    }
+
+    @Test
     fun `regional labels and aliases never replace game IDs`() {
         val jp = """[
             {"id":300500,"collectionNo":18,"name":"エリザベート","className":"lancer","type":"normal"},

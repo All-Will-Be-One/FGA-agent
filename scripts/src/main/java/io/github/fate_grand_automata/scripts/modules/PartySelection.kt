@@ -1,6 +1,7 @@
 package io.github.fate_grand_automata.scripts.modules
 
 import io.github.fate_grand_automata.scripts.IFgoAutomataApi
+import io.github.fate_grand_automata.scripts.entrypoints.AutoBattle
 import io.github.fate_grand_automata.scripts.Images
 import io.github.fate_grand_automata.scripts.ScriptLog
 import io.github.fate_grand_automata.scripts.prefs.IBattleConfig
@@ -15,9 +16,22 @@ class PartySelection @Inject constructor(
     private val battleConfig: IBattleConfig
 ) : IFgoAutomataApi by api {
     private var partySelected = false
+    private var agentPartyVerified = false
+
+    private fun readExactSlot(): Int? =
+        locations.selectedPartyRegion.findAll(images[Images.SelectedParty]).singleOrNull()?.let {
+            AgentPartyGate.indexFromMarker(it.region.center.x, locations.partySelectionArray.map { tap -> tap.x })
+        }
+
+    fun requirePartyForRepeat() {
+        if (battleConfig.agentManagesParty && !agentPartyVerified) {
+            throw AutoBattle.BattleExitException(AutoBattle.ExitReason.AgentPartySlotUnverified)
+        }
+    }
 
     /**
-     * Selects the party for the quest based on the AutoSkill configuration.
+     * Agent runs verify the last preset and do not use the manual fallback taps below.
+     * Interactive runs select the party based on the AutoSkill configuration.
      *
      * The possible behaviors of this method are:
      * 1. If no value is specified, the currently selected party is used.
@@ -28,6 +42,24 @@ class PartySelection @Inject constructor(
      */
     fun selectParty() {
         val party = battleConfig.party
+        if (battleConfig.agentManagesParty) {
+            agentPartyVerified = false
+            when (AgentPartyGate.prepare(battleConfig.ownPartyPlan.isNotEmpty(), ::readExactSlot) { index ->
+                locations.partySelectionArray[index].click()
+                1.2.seconds.wait()
+            }) {
+                AgentPartyGate.Result.Verified -> agentPartyVerified = true
+                AgentPartyGate.Result.SlotUnverified ->
+                    throw AutoBattle.BattleExitException(AutoBattle.ExitReason.AgentPartySlotUnverified)
+                AgentPartyGate.Result.EditorRequired ->
+                    throw AutoBattle.BattleExitException(AutoBattle.ExitReason.AgentPartyEditorRequired)
+            }
+            return
+        }
+
+        if (party == AgentPartyGate.RESERVED_INDEX || (party == -1 && readExactSlot() == AgentPartyGate.RESERVED_INDEX)) {
+            throw AutoBattle.BattleExitException(AutoBattle.ExitReason.AgentPartyReserved)
+        }
 
         if (!partySelected && party in locations.partySelectionArray.indices) {
             val currentParty = locations.selectedPartyRegion

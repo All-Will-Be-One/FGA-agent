@@ -23,6 +23,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.github.fate_grand_automata.R
 import io.github.fate_grand_automata.prefs.core.BattleConfigCore
+import io.github.fate_grand_automata.scripts.modules.AgentPartyGate
 import io.github.fate_grand_automata.ui.dialog.FgaDialog
 import io.github.fate_grand_automata.ui.prefs.remember
 
@@ -61,9 +62,11 @@ fun PartySelection(
         modifier = modifier
     ) {
         ConfigSummaryValue(
-            if (party == -1)
-                stringResource(R.string.battle_config_party_default)
-            else (party + 1).toString()
+            when (party) {
+                -1 -> stringResource(R.string.battle_config_party_default)
+                AgentPartyGate.RESERVED_INDEX -> stringResource(R.string.agent_party_reserved_label)
+                else -> (party + 1).toString()
+            }
         )
     }
 }
@@ -72,6 +75,7 @@ fun PartySelection(
 private fun PartySelectionItem(
     text: String,
     isSelected: Boolean,
+    enabled: Boolean = true,
     onSelectedChange: () -> Unit
 ) {
     val background = if (isSelected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.surfaceVariant
@@ -91,7 +95,7 @@ private fun PartySelectionItem(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .size(40.dp)
-                .clickable(onClick = onSelectedChange)
+                .clickable(enabled = enabled, onClick = onSelectedChange)
         ) {
             Text(text)
         }
@@ -104,7 +108,12 @@ fun PartySelectionDialogContent(
     onSelectedChange: (Int) -> Unit
 ) {
     Column {
-        val partyRange = 0..14
+        Text(
+            stringResource(R.string.agent_party_reservation_hint),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.bodySmall
+        )
+        val partyRange = 0 until AgentPartyGate.PRESET_COUNT
 
         partyRange
             .chunked(5)
@@ -118,6 +127,7 @@ fun PartySelectionDialogContent(
                         PartySelectionItem(
                             text = "${it + 1}",
                             isSelected = selected == it,
+                            enabled = it in AgentPartyGate.manualIndices,
                             onSelectedChange = { onSelectedChange(it) }
                         )
                     }

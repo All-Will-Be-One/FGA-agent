@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.github.fate_grand_automata.R
+import io.github.fate_grand_automata.supportcatalog.CatalogKind
 import io.github.fate_grand_automata.supportcatalog.CatalogServant
 import io.github.fate_grand_automata.supportcatalog.ServantCatalog
 import io.github.fate_grand_automata.supportcatalog.SupportPortraitImporter
@@ -52,6 +53,7 @@ internal fun SelectCatalogServantDialog(
     confirmLabel: Int,
     onDismiss: () -> Unit,
     disabledIds: Set<Int> = emptySet(),
+    kind: CatalogKind = CatalogKind.Servant,
     prepare: (suspend (CatalogServant) -> Unit)? = null,
     onSelected: (CatalogServant) -> Unit
 ) {
@@ -69,7 +71,7 @@ internal fun SelectCatalogServantDialog(
         loading = true
         error = false
         try {
-            catalog = withContext(Dispatchers.IO) { ServantCatalog.fetch() }
+            catalog = withContext(Dispatchers.IO) { ServantCatalog.fetch(kind) }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             Timber.w(e, "Servant catalog loading failed")
@@ -93,12 +95,18 @@ internal fun SelectCatalogServantDialog(
                     OutlinedTextField(
                         value = query,
                         onValueChange = { query = it; selected = null },
-                        label = { Text(stringResource(R.string.support_catalog_search)) },
+                        label = { Text(stringResource(
+                            if (kind == CatalogKind.CraftEssence) R.string.agent_party_ce_search
+                            else R.string.support_catalog_search
+                        )) },
                         enabled = !importing,
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    if (matches.isEmpty()) Text(stringResource(R.string.support_catalog_empty))
+                    if (matches.isEmpty()) Text(stringResource(
+                        if (kind == CatalogKind.CraftEssence) R.string.agent_party_ce_empty
+                        else R.string.support_catalog_empty
+                    ))
                     LazyColumn(Modifier.heightIn(max = 280.dp)) {
                         items(matches, key = { it.id }) { servant ->
                             TextButton(
@@ -107,7 +115,9 @@ internal fun SelectCatalogServantDialog(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 val marker = if (selected?.id == servant.id) "✓ " else ""
-                                Text("$marker${servant.label(region)} · ${servant.className} · #${servant.collectionNo}")
+                                val display = listOf(servant.label(region), servant.className, "#${servant.collectionNo}")
+                                    .filter(String::isNotBlank).joinToString(" · ")
+                                Text("$marker$display")
                             }
                         }
                     }

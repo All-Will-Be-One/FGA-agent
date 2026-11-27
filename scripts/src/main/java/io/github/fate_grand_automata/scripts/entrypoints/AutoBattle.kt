@@ -73,6 +73,9 @@ class AutoBattle @Inject constructor(
         class CardPriorityParseError(val msg: String) : ExitReason()
         data object Paused : ExitReason()
         data object StopAfterThisRun : ExitReason()
+        data object AgentPartySlotUnverified : ExitReason()
+        data object AgentPartyEditorRequired : ExitReason()
+        data object AgentPartyReserved : ExitReason()
         data object OutOfCommandSpells: ExitReason()
     }
 
@@ -368,6 +371,7 @@ class AutoBattle @Inject constructor(
     private fun isRepeatScreen() = findRepeatButton() != null
 
     private fun repeatQuest() {
+        partySelection.requirePartyForRepeat()
         // Needed to show we don't need to enter the "StartQuest" function
         isContinuing = true
         storySkipPossible = false

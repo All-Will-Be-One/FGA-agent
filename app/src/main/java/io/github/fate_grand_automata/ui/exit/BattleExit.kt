@@ -73,6 +73,9 @@ private fun AutoBattle.ExitReason.text(): String = when (this) {
     is AutoBattle.ExitReason.CardPriorityParseError -> msg
     AutoBattle.ExitReason.FirstClearRewards -> stringResource(R.string.first_clear_rewards)
     AutoBattle.ExitReason.Paused -> stringResource(R.string.script_paused)
+    AutoBattle.ExitReason.AgentPartyReserved -> stringResource(R.string.agent_party_reserved_error)
+    AutoBattle.ExitReason.AgentPartySlotUnverified -> stringResource(R.string.agent_party_unverified)
+    AutoBattle.ExitReason.AgentPartyEditorRequired -> stringResource(R.string.agent_party_editor_required)
     AutoBattle.ExitReason.StopAfterThisRun -> stringResource(R.string.stop_after_this_run)
     AutoBattle.ExitReason.OutOfCommandSpells -> stringResource(id = R.string.p_stop_on_out_of_command_spell)
 }

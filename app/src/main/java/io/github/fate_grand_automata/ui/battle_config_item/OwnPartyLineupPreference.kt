@@ -22,8 +22,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.github.fate_grand_automata.R
 import io.github.fate_grand_automata.prefs.core.BattleConfigCore
+import io.github.fate_grand_automata.prefs.core.EquipmentAction
+import io.github.fate_grand_automata.prefs.core.OwnPartyEquipment
 import io.github.fate_grand_automata.prefs.core.OwnPartyLineup
 import io.github.fate_grand_automata.prefs.core.OwnPartyMember
+import io.github.fate_grand_automata.supportcatalog.CatalogKind
 import io.github.fate_grand_automata.supportcatalog.SupportServantStore
 import io.github.fate_grand_automata.ui.pref_support.SelectCatalogServantDialog
 import io.github.fate_grand_automata.ui.prefs.Preference
@@ -34,6 +37,8 @@ internal fun OwnPartyLineupPreference(config: BattleConfigCore) {
     var saved by config.ownPartyLineup.remember()
     var draft by remember(config.id) { mutableStateOf<OwnPartyLineup?>(null) }
     var picking by remember(config.id) { mutableStateOf<Int?>(null) }
+    var equipmentSlot by remember(config.id) { mutableStateOf<Int?>(null) }
+    var searchingEquipment by remember(config.id) { mutableStateOf(false) }
     val region = SupportServantStore.region(LocalConfiguration.current.locales[0])
 
     Preference(
@@ -44,11 +49,59 @@ internal fun OwnPartyLineupPreference(config: BattleConfigCore) {
         onClick = {
             draft = saved
             picking = null
+            equipmentSlot = null
+            searchingEquipment = false
         }
     )
 
     val lineup = draft ?: return
     val slot = picking
+    val ceSlot = equipmentSlot
+    val ceMember = ceSlot?.let(lineup.slots::get)
+    if (ceSlot != null && ceMember != null) {
+        fun updateEquipment(choice: OwnPartyEquipment) {
+            draft = lineup.withMember(ceSlot, ceMember.copy(equipment = choice))
+            equipmentSlot = null
+            searchingEquipment = false
+        }
+
+        if (searchingEquipment) {
+            SelectCatalogServantDialog(
+                title = R.string.agent_party_ce_choose,
+                confirmLabel = R.string.own_party_select,
+                onDismiss = { searchingEquipment = false },
+                kind = CatalogKind.CraftEssence,
+                onSelected = { ce -> updateEquipment(OwnPartyEquipment(EquipmentAction.Equip, ce.id, ce.names)) }
+            )
+        } else {
+            AlertDialog(
+                onDismissRequest = { equipmentSlot = null },
+                title = { Text(stringResource(R.string.agent_party_ce)) },
+                text = {
+                    Column {
+                        Text(stringResource(R.string.agent_party_ce_filter_hint))
+                        TextButton(onClick = { updateEquipment(OwnPartyEquipment()) }) {
+                            Text(stringResource(R.string.agent_party_ce_keep))
+                        }
+                        TextButton(onClick = { updateEquipment(OwnPartyEquipment(EquipmentAction.Remove)) }) {
+                            Text(stringResource(R.string.agent_party_ce_remove))
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { searchingEquipment = true }) {
+                        Text(stringResource(R.string.agent_party_ce_choose))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { equipmentSlot = null }) {
+                        Text(stringResource(android.R.string.cancel))
+                    }
+                }
+            )
+        }
+        return
+    }
     if (slot != null) {
         SelectCatalogServantDialog(
             title = R.string.own_party_choose,
@@ -56,7 +109,8 @@ internal fun OwnPartyLineupPreference(config: BattleConfigCore) {
             onDismiss = { picking = null },
             disabledIds = lineup.otherIds(slot),
             onSelected = { servant ->
-                draft = lineup.withMember(slot, OwnPartyMember(servant.id, servant.names))
+                val existing = lineup.slots[slot]?.takeIf { it.id == servant.id }?.equipment
+                draft = lineup.withMember(slot, OwnPartyMember(servant.id, servant.names, existing ?: OwnPartyEquipment()))
                 picking = null
             }
         )
@@ -73,26 +127,39 @@ internal fun OwnPartyLineupPreference(config: BattleConfigCore) {
                     LazyColumn(Modifier.heightIn(max = 300.dp)) {
                         items(OwnPartyLineup.SLOT_RANGE.toList(), key = { it }) { position ->
                             val member = lineup.slots[position]
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                TextButton(
-                                    onClick = { picking = position },
-                                    modifier = Modifier.weight(1f)
+                            Column {
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    val positionLabel = stringResource(
-                                        if (position <= 3) R.string.own_party_front_slot
-                                        else R.string.own_party_back_slot,
-                                        position
-                                    )
-                                    val memberLabel = member?.label(region)
-                                        ?: stringResource(R.string.own_party_unset)
-                                    Text("$positionLabel: $memberLabel")
+                                    TextButton(
+                                        onClick = { picking = position },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        val positionLabel = stringResource(
+                                            if (position <= 3) R.string.own_party_front_slot
+                                            else R.string.own_party_back_slot,
+                                            position
+                                        )
+                                        val memberLabel = member?.label(region)
+                                            ?: stringResource(R.string.own_party_unset)
+                                        Text("$positionLabel: $memberLabel")
+                                    }
+                                    if (member != null) {
+                                        TextButton(onClick = { draft = lineup.withMember(position, null) }) {
+                                            Text(stringResource(R.string.clear))
+                                        }
+                                    }
                                 }
                                 if (member != null) {
-                                    TextButton(onClick = { draft = lineup.withMember(position, null) }) {
-                                        Text(stringResource(R.string.clear))
+                                    val equipment = member.equipment
+                                    val label = when (equipment.action) {
+                                        EquipmentAction.Keep -> stringResource(R.string.agent_party_ce_keep)
+                                        EquipmentAction.Remove -> stringResource(R.string.agent_party_ce_remove)
+                                        EquipmentAction.Equip -> equipment.label(region).orEmpty()
+                                    }
+                                    TextButton(onClick = { equipmentSlot = position }) {
+                                        Text(stringResource(R.string.agent_party_ce_summary, label))
                                     }
                                 }
                             }

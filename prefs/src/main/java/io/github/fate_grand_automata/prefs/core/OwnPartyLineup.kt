@@ -3,12 +3,36 @@ package io.github.fate_grand_automata.prefs.core
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class OwnPartyMember(val id: Int, val names: Map<String, String>) {
+data class OwnPartyMember(
+    val id: Int,
+    val names: Map<String, String>,
+    val equipment: OwnPartyEquipment = OwnPartyEquipment()
+) {
     init {
         require(id > 0 && names.isNotEmpty() && names.values.none(String::isBlank))
     }
 
     fun label(region: String): String = names[region] ?: names["NA"] ?: names["JP"] ?: names.values.first()
+}
+
+@Serializable
+enum class EquipmentAction { Keep, Remove, Equip }
+
+@Serializable
+data class OwnPartyEquipment(
+    val action: EquipmentAction = EquipmentAction.Keep,
+    val id: Int? = null,
+    val names: Map<String, String> = emptyMap()
+) {
+    init {
+        if (action == EquipmentAction.Equip) {
+            require(id != null && id > 0 && names.isNotEmpty() && names.values.none(String::isBlank))
+        } else {
+            require(id == null && names.isEmpty())
+        }
+    }
+
+    fun label(region: String): String? = names[region] ?: names["NA"] ?: names["JP"] ?: names.values.firstOrNull()
 }
 
 @Serializable

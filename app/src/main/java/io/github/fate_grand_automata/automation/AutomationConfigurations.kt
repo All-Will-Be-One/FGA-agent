@@ -3,6 +3,9 @@ package io.github.fate_grand_automata.automation
 import io.github.fate_grand_automata.runner.BattleRunValidationException
 import io.github.fate_grand_automata.scripts.enums.GameServer
 import io.github.fate_grand_automata.scripts.prefs.IBattleConfig
+import io.github.fate_grand_automata.scripts.modules.AgentEquipmentAction
+import io.github.fate_grand_automata.scripts.modules.AgentEquipmentFilter
+import io.github.fate_grand_automata.scripts.modules.AgentPartyGate
 import kotlinx.serialization.json.*
 import java.security.MessageDigest
 
@@ -20,6 +23,25 @@ internal fun automationConfigurations(configs:List<IBattleConfig>,resolveServer:
             add(buildJsonObject {
                 put("id",config.id);put("name",config.name)
                 put("server",resolveServer(config)?.let { JsonPrimitive(region(it)) } ?: JsonNull)
+                putJsonObject("agentParty") {
+                    put("preset", AgentPartyGate.RESERVED_NUMBER)
+                    put("inGameEditingSupported", false)
+                    putJsonArray("lineup") {
+                        config.ownPartyPlan.forEach { member ->
+                            add(buildJsonObject {
+                                put("position", member.position)
+                                put("servantId", member.servantId)
+                                putJsonObject("equipment") {
+                                    put("action", member.equipmentAction.name)
+                                    if (member.equipmentAction == AgentEquipmentAction.Equip) {
+                                        member.craftEssenceId?.let { put("craftEssenceId", it) }
+                                        put("filterPolicy", AgentEquipmentFilter.EventBonusFirst.name)
+                                    }
+                                }
+                            })
+                        }
+                    }
+                }
                 put("scriptSha256",scriptHash.getOrNull()?.let(::JsonPrimitive) ?: JsonNull)
                 scriptHash.exceptionOrNull()?.let { put("scriptHashWarning",it.message ?: it.javaClass.simpleName) }
             })

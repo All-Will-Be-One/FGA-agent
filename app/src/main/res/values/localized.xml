@@ -643,4 +643,17 @@ If your FGO version isn't recognized or runs inside an app cloner, select your s
     <string name="own_party_back_slot">Back %1$d</string>
     <string name="own_party_unset">Unassigned</string>
     <string name="own_party_save">Save</string>
+    <string name="agent_party_reserved_label">15 · Agent</string>
+    <string name="agent_party_reservation_hint">Choose presets 1–14 manually. The Agent uses preset 15.</string>
+    <string name="agent_party_reserved_error">Preset 15 is reserved for the Agent. Choose presets 1–14.</string>
+    <string name="agent_party_unverified">Could not verify preset 15. The Agent did not start another quest.</string>
+    <string name="agent_party_editor_required">The plan calls for changing Servants or Craft Essences. The Agent stopped before the quest because those edits could not be verified.</string>
+    <string name="agent_party_ce">Craft Essence</string>
+    <string name="agent_party_ce_summary">Craft Essence: %1$s</string>
+    <string name="agent_party_ce_empty">No matching Craft Essences</string>
+    <string name="agent_party_ce_search">Craft Essence name or number</string>
+    <string name="agent_party_ce_choose">Choose Craft Essence</string>
+    <string name="agent_party_ce_keep">Keep equipped</string>
+    <string name="agent_party_ce_remove">Unequip</string>
+    <string name="agent_party_ce_filter_hint">For event equipment, try the game’s Event Bonus filter first, then verify the exact Craft Essence. Automatic in-game changes are not yet enabled.</string>
 </resources>

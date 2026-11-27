@@ -100,7 +100,9 @@ The config list also gets one tab per server.
 
 ## Party
 
-Pick one of the 15 party slots. Before each quest, FGA switches to that party if it isn't already selected. **Default** keeps whatever party is selected.
+Pick a manual preset from 1–14. **Default** keeps the currently selected manual preset.
+The last preset (15) is reserved for native Agent calls. The Agent does not tap other
+presets as a fallback and stops before launching if it cannot verify preset 15.
 
 ![Battle Configs - Party Selection](img/battle/party-selection.jpeg "Battle Configs - Party Selection")
 
@@ -112,9 +114,14 @@ unassigned; set which support to borrow separately under **Support Selection**.
 Search the same catalog by a name or number. The lineup saves the unique Atlas
 ID in each position, with local names for display, without downloading support images.
 
-The existing numbered **Party** setting still selects an in-game preset.
-The lineup is a record in the battle configuration; it does not verify, reorder
-or replace Servants in FGO. Changes are saved only when you tap **Save**.
+Per owned Servant, a Craft Essence plan can keep the current item, unequip it, or name a
+specific Atlas Craft Essence by ID. Event equipment plans prefer the in-game Event Bonus
+filter, followed by exact item confirmation. This is separate from borrowed support equipment.
+
+The numbered **Party** setting still selects a manual in-game preset. The Agent uses
+preset 15 but does not yet edit or verify the roster or equipment in the game. With a
+nonempty lineup plan, it stops at confirmation instead of launching with an old team.
+Configuration edits are saved only when you tap **Save**.
 
 ## Raid
 

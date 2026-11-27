@@ -3,6 +3,8 @@ package io.github.fate_grand_automata.runner
 import io.github.fate_grand_automata.scripts.enums.GameServer
 import io.github.fate_grand_automata.scripts.enums.RefillResourceEnum
 import io.github.fate_grand_automata.scripts.prefs.IBattleConfig
+import io.github.fate_grand_automata.scripts.modules.AgentEquipmentAction
+import io.github.fate_grand_automata.scripts.modules.AgentPartyMemberPlan
 import io.github.fate_grand_automata.scripts.prefs.IPerServerConfigPrefs
 import io.github.fate_grand_automata.scripts.prefs.IPreferences
 import io.github.fate_grand_automata.scripts.decision.NativeBattleDecisionProvider
@@ -42,6 +44,7 @@ class BattleRunRequestTest {
         var withdraw = false
         var configsPresent = true
         var forbidLegacy = false
+        var partyPlan = emptyList<AgentPartyMemberPlan>()
         val writes = mutableListOf<String>()
         val serverPrefs = ServerPrefs(GameServer.Jp.Original)
         var server: GameServer = GameServer.En.Original
@@ -50,6 +53,7 @@ class BattleRunRequestTest {
         val config: IBattleConfig = proxy { name, _ ->
             when (name) {
                 "getId" -> "existing"
+                "getOwnPartyPlan" -> partyPlan
                 "getServer" -> configServer
                 "getSkillCommand" -> { check(!forbidLegacy) { "Unused legacy getter accessed" }; command }
                 else -> error("Unexpected config call: $name")
@@ -77,6 +81,19 @@ class BattleRunRequestTest {
             waitForApRegen = false,
             timeoutSeconds = 60
         )
+    }
+
+    @Test
+    fun `native Agent freezes its own reserved slot and pending plan`() {
+        val f = Fixture()
+        f.partyPlan = listOf(AgentPartyMemberPlan(1, 504500, AgentEquipmentAction.Equip, 9400010))
+        val validated = f.handler.validate(f.request(), BattleRunPolicy.Automation)
+        val fixed = ScriptRunPreferences.automation(f.prefs, validated).prefs.selectedBattleConfig
+        f.partyPlan = emptyList()
+        assertEquals(14, fixed.party)
+        assertTrue(fixed.agentManagesParty)
+        assertEquals(9400010, fixed.ownPartyPlan.single().craftEssenceId)
+        assertTrue(f.writes.isEmpty())
     }
 
     @Test

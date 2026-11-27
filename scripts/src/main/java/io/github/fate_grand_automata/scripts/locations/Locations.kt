@@ -2,6 +2,7 @@ package io.github.fate_grand_automata.scripts.locations
 
 import io.github.fate_grand_automata.scripts.enums.RefillResourceEnum
 import io.github.fate_grand_automata.scripts.models.BoostItem
+import io.github.fate_grand_automata.scripts.modules.AgentPartyGate
 import io.github.lib_automata.Location
 import io.github.lib_automata.Region
 import io.github.lib_automata.dagger.ScriptScope
@@ -91,7 +92,7 @@ class Locations @Inject constructor(
 
     val selectedPartyRegion = Region(-370, 62, 740, 72).xFromCenter()
     
-    val partySelectionArray: List<Location> = (0..14).map {
+    val partySelectionArray: List<Location> = (0 until AgentPartyGate.PRESET_COUNT).map {
         // Party 8 is on the center
         Location(((it - 7) * 50), 100).xFromCenter()
     }

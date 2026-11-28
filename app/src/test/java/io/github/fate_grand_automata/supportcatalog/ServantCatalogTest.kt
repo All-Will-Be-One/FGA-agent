@@ -84,6 +84,25 @@ class ServantCatalogTest {
     }
 
     @Test
+    fun `changes sharing stage keys and transform groups retain every distinct portrait`() {
+        val face = "https://static.atlasacademy.io/JP/Faces/f_4038001.png"
+        val altFace = face.replace("1.png", "1d.png")
+        val figure = "https://static.atlasacademy.io/JP/NarrowFigure/403800/403800@1.png"
+        val altFigure = figure.replace("@1", "d@1")
+        val other = figure.replace("@1", "b@1")
+        val body = """{"id":403800,"extraAssets":{
+            "faces":{"ascension":{"2":"$face"},"story":null},"facesChange":{"ascension":{"2":"$altFace"}},
+            "narrowFigure":{"ascension":{"2":"$figure"},"transformGroup":{"0":"$other"}},
+            "narrowFigureChange":{"ascension":{"2":"$altFigure"},"costume":{"3":"$other"}}}}"""
+        val urls = ServantCatalog.parsePartyArtUrls(403800, body)
+        assertEquals(listOf(face, altFace), urls.faces)
+        assertEquals(listOf(figure, other, altFigure), urls.figures)
+        assertFailsWith<IllegalArgumentException> {
+            ServantCatalog.parsePartyArtUrls(403800, body.replace(altFigure, "https://example.com/a.png"))
+        }
+    }
+
+    @Test
     fun `reimport renames the display label without changing the selection or touching manual data`() {
         val store = SupportServantStore.inApp(directory)
         val manual = File(directory, "manual.png").apply { writeText("original") }

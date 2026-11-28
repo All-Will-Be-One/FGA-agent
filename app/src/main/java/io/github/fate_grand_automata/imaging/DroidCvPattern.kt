@@ -165,6 +165,9 @@ class DroidCvPattern(
             } else null
         }
 
+    override fun bestMatchScore(template: Pattern): Double =
+        match(template)?.use { Core.minMaxLoc(it).maxVal } ?: Double.NEGATIVE_INFINITY
+
     override val width get() = mat.width()
     override val height get() = mat.height()
 

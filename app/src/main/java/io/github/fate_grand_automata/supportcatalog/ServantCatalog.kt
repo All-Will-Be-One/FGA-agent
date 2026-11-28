@@ -116,8 +116,10 @@ internal object ServantCatalog {
 
     @Serializable
     private data class ExtraAssets(
-        val faces: Map<String, Map<String, String>>,
-        val narrowFigure: Map<String, Map<String, String>> = emptyMap(),
+        val faces: Map<String, Map<String, String>?>,
+        val facesChange: Map<String, Map<String, String>?> = emptyMap(),
+        val narrowFigureChange: Map<String, Map<String, String>?> = emptyMap(),
+        val narrowFigure: Map<String, Map<String, String>?> = emptyMap(),
         val equipFace: Map<String, Map<String, String>> = emptyMap()
     )
 
@@ -140,8 +142,12 @@ internal object ServantCatalog {
         return validatedFaces(result.extraAssets)
     }
 
+    // Groups may share stage keys but point at different art. Deduplicate by URL only.
+    private fun variantUrls(base: Map<String, Map<String, String>?>, changes: Map<String, Map<String, String>?>) =
+        (base.values + changes.values).filterNotNull().flatMap { it.values }.distinct()
+
     private fun validatedFaces(assets: ExtraAssets) =
-        assets.faces.values.flatMap { it.values }.distinct().onEach {
+        variantUrls(assets.faces, assets.facesChange).onEach {
             require(isFaceUrl(it)) { "Unexpected Atlas face URL" }
         }.also {
             require(it.isNotEmpty() && it.size <= 96) { "Unexpected number of Atlas faces" }
@@ -150,7 +156,7 @@ internal object ServantCatalog {
     fun parsePartyArtUrls(id: Int, body: String): PartyArtUrls {
         val result = catalogJson.decodeFromString<NiceServant>(body)
         require(result.id == id) { "Atlas returned a different servant" }
-        val figures = result.extraAssets.narrowFigure.values.flatMap { it.values }.distinct()
+        val figures = variantUrls(result.extraAssets.narrowFigure, result.extraAssets.narrowFigureChange)
         require(figures.size <= 96 && figures.all { figureUrl.matches(it) }) { "Unexpected Atlas formation art" }
         return PartyArtUrls(validatedFaces(result.extraAssets), figures)
     }

@@ -312,17 +312,16 @@ class NativePartyEditor @Inject constructor(
         val art = m.idArt ?: return f.match(requireNotNull(m.portrait),
             box(centers[m.slot] - 31, 138, 62, 61), .90) != null
         val center = px(centers[m.slot])
-        val figureMatches = art.figures.any { variant ->
-            variant.count { patch ->
-                val x = center - patch.xToCenter - patch.image.width / 2
-                val y = px(82) + patch.top
-                val region = Region(x - 7, y - 7, patch.image.width + 14, patch.image.height + 14)
-                f.match(patch.image, region, .91) != null
-            } >= 2
+        val figureScore = bestPortraitScore(art.figures) { patch ->
+            val x = center - patch.xToCenter - patch.image.width / 2
+            val y = px(82) + patch.top
+            val region = Region(x - 7, y - 7, patch.image.width + 14, patch.image.height + 14)
+            f.crop(region).use { it.bestMatchScore(patch.image) }
         }
-        return figureMatches || art.formation.any {
-            artMatches(f, it, box(centers[m.slot] - 62, 124, 124, 103))
+        val faceScore = f.crop(box(centers[m.slot] - 62, 124, 124, 103)).use { area ->
+            bestPortraitScore(art.formation) { area.bestMatchScore(it.image) }
         }
+        return maxOf(figureScore, faceScore) >= .91
     }
 
     private fun rosterMatches(f: Pattern, members: List<Member>, support: Int): Boolean {
@@ -375,15 +374,19 @@ class NativePartyEditor @Inject constructor(
                         if (abs(cx - x) > 11 || y !in top + 7..460) null else Candidate(cx, y, m.score, i)
                     }.toList()
                 }
-                matches.sortedByDescending { it.score }.forEach { match ->
-                    if (result.any { it.x == match.x && abs(it.y - match.y) < 44 }) return@forEach
+                matches.forEach { match ->
                     val votes = matches.filter { it.x == match.x && abs(it.y - match.y) < 29 }
                         .map { it.votes }.distinct().size
                     if (votes >= 2 && match.score >= .94) result += match.copy(votes = votes)
                 }
             }
         }
-        return result.sortedByDescending { it.score }
+        // Multiple stages may identify the same grid cell. Keep its strongest qualified match.
+        val cells = mutableListOf<Candidate>()
+        for (match in result.sortedByDescending { it.score }) {
+            if (cells.none { it.x == match.x && abs(it.y - match.y) < 44 }) cells += match
+        }
+        return cells
     }
 
     private fun scroll(ce: Boolean) {

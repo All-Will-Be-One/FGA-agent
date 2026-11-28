@@ -49,6 +49,10 @@ interface Pattern : AutoCloseable {
     fun findBestMatch(template: Pattern, similarity: Double): Match? =
         findMatches(template, similarity).firstOrNull()
 
+    /** Highest correlation in this region, or negative infinity if the template does not fit. */
+    fun bestMatchScore(template: Pattern): Double =
+        findBestMatch(template, -1.0)?.score ?: Double.NEGATIVE_INFINITY
+
     /**
      * Crops the image to be within the bounds of the given [region].
      *

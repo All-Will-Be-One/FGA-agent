@@ -521,45 +521,22 @@ class NativePartyEditor @Inject constructor(
 
     private fun saveAndReopen(members: List<Member>, support: Int) {
         report("saving XV and reopening")
-        await("complete XV before saving") {
-            formation() && party() == 15 && rosterMatches(this, members, support)
-        }.close()
-        saved = true
-        // In arrangement mode the first press may only return to the normal
-        // editor. Confirm the menu, or retry only on the same verified XV.
-        var menu = false
-        for (attempt in 1..3) {
-            await("verified XV before save confirmation") {
-                formation() && party() == 15 && rosterMatches(this, members, support)
-            }.close()
-            tap(983, 442)
-            val next = awaitOrNull(11) { onFormationMenu() }
-            if (next != null) {
-                next.close()
-                menu = true
-                break
+        fun observe() = frame().use { f ->
+            when {
+                f.onFormationMenu() -> PartyScreen.Menu
+                f.formation() && f.party() == 15 && rosterMatches(f, members, support) -> PartyScreen.VerifiedXV
+                else -> PartyScreen.Other
             }
         }
-        if (!menu) fail("Expected Formation menu after save")
-        // A detected menu can still be in its return animation and ignore the
-        // first tap. Retry only if the Formation menu is still positively visible;
-        // never tap the same coordinate on an editor or another screen.
-        var reopened = false
-        for (attempt in 1..2) {
-            Thread.sleep(650)
-            await("stable Formation menu before reopening XV") { onFormationMenu() }.close()
-            tap(841, 116)
-            val current = awaitOrNull(7) {
-                formation() && party() == 15 && rosterMatches(this, members, support)
-            }
-            if (current != null) {
-                current.close()
-                reopened = true
-                break
-            }
-            if (!frame().use { it.onFormationMenu() }) break
-        }
-        if (!reopened) fail("Expected reopened XV matching ordered servants and Craft Essences")
+        val pause = { Thread.sleep(220) }
+        if (!awaitPartyTransition(PartyScreen.VerifiedXV, PartyScreen.Menu, ::observe, pause) {
+                saved = true
+                tap(983, 442)
+            }) fail("Expected Formation menu after saving verified XV")
+
+        if (!awaitPartyTransition(PartyScreen.Menu, PartyScreen.VerifiedXV, ::observe, pause) {
+                tap(841, 116)
+            }) fail("Expected reopened XV matching ordered servants and Craft Essences")
         report("rechecking saved Craft Essence names and limit breaks")
         if (!savedEquipmentMatches(members))
             fail("Reopened XV has an incorrect Craft Essence name or limit break")

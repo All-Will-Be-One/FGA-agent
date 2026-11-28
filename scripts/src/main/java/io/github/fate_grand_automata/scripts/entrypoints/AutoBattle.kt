@@ -380,9 +380,8 @@ class AutoBattle @Inject constructor(
     internal fun repeatQuest() {
         // Settle the finished run and honor its stop limit before authorizing another sortie.
         battle.resetState()
-        partySelection.requirePartyForRepeat()
         verifiedSupportForBattle = false
-        // Needed to show we don't need to enter the "StartQuest" function
+        // The game reuses the previous party on repeat and opens support selection.
         isContinuing = true
         storySkipPossible = false
 

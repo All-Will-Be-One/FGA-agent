@@ -71,6 +71,8 @@ New start and plan identities/Executing transitions are durable before input. Or
 
 Known configured stops (CE, materials, first-clear, run ceiling, manual support/inventory) retain their reason and count. They are NeedsAttention when the requested target is unmet; only actual native counts or the explicit AP condition can fulfill the target. Unexpected errors remain failures. No additional screen, skill-effect, per-card acceptance or animation timer is introduced.
 
+On the post-battle repeat prompt, FGA settles any tracked run and honors its run limit. Continuing the same quest reuses the previous party, including when automation started mid-battle. New quest starts through the formation screen still verify the reserved preset. Any configured requirements for the newly borrowed support still apply.
+
 ### Calculated JP formation (reserve XV)
 
 If `calculatedPartyVersion` is 1, `party.apply` takes a versioned calculated

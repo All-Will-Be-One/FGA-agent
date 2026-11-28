@@ -17,7 +17,6 @@ class PartySelection @Inject constructor(
     private val battleConfig: IBattleConfig
 ) : IFgoAutomataApi by api {
     private var partySelected = false
-    private var agentPartyVerified = false
 
     private fun readExactSlot(): Int? {
         // The old EN crop scores similarly for active and inactive JP dots.
@@ -28,12 +27,6 @@ class PartySelection @Inject constructor(
             .singleOrNull()?.let {
                 AgentPartyGate.indexFromMarker(it.region.center.x, locations.partySelectionArray.map { tap -> tap.x })
             }
-    }
-
-    fun requirePartyForRepeat() {
-        if (battleConfig.agentManagesParty && !agentPartyVerified) {
-            throw AutoBattle.BattleExitException(AutoBattle.ExitReason.AgentPartySlotUnverified)
-        }
     }
 
     /**
@@ -50,18 +43,16 @@ class PartySelection @Inject constructor(
     fun selectParty() {
         val party = battleConfig.party
         if (battleConfig.agentManagesParty) {
-            agentPartyVerified = false
             when (AgentPartyGate.prepare(battleConfig.ownPartyPlan.isNotEmpty(), ::readExactSlot) { index ->
                 locations.partySelectionArray[index].click()
                 1.2.seconds.wait()
             }) {
-                AgentPartyGate.Result.Verified -> agentPartyVerified = true
+                AgentPartyGate.Result.Verified -> return
                 AgentPartyGate.Result.SlotUnverified ->
                     throw AutoBattle.BattleExitException(AutoBattle.ExitReason.AgentPartySlotUnverified)
                 AgentPartyGate.Result.EditorRequired ->
                     throw AutoBattle.BattleExitException(AutoBattle.ExitReason.AgentPartyEditorRequired)
             }
-            return
         }
 
         if (party == AgentPartyGate.RESERVED_INDEX || (party == -1 && readExactSlot() == AgentPartyGate.RESERVED_INDEX)) {

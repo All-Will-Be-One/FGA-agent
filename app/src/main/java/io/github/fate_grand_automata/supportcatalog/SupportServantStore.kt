@@ -48,7 +48,7 @@ internal class SupportServantStore(private val directory: File) {
         emptyList()
     }
 
-    private fun servant(id: Int): CatalogServant? = runCatching {
+    fun servant(id: Int): CatalogServant? = runCatching {
         ZipFile(archive(id)).use { zip ->
             val entry = zip.getEntry("servant.json") ?: return@use null
             val json = zip.getInputStream(entry).bufferedReader().use { it.readText() }

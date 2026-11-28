@@ -77,14 +77,17 @@ object AutomationBridge {
                             val recipe = requireNotNull(plan)
                             progress("preflight: prepare exact friend servant image")
                             val store = SupportServantStore.inApp(context.filesDir)
-                            if (store.read(recipe.support.servantId).isEmpty()) {
-                                val catalog = ServantCatalog.fetch().singleOrNull { it.id == recipe.support.servantId }
-                                    ?: throw RpcFailure("SupportUnavailable", "Friend servant ID is missing from the JP catalog")
+                            val friendId = recipe.support.servantId
+                            val cached = store.servant(friendId)
+                            val catalog = cached?.takeIf { it.className.isNotBlank() }
+                                ?: ServantCatalog.fetch().singleOrNull { it.id == friendId }
+                                ?: throw RpcFailure("SupportUnavailable", "Friend servant ID is missing from the JP catalog")
+                            val supportClass = recipeSupportClass(catalog.className).name
+                            if (cached != catalog || store.read(friendId).isEmpty())
                                 runBlocking { SupportPortraitImporter.import(catalog, store) }
-                            }
                             fun conflictCheck() {
                                 val found = prefs.battleConfigs.firstOrNull { it.id == recipe.configId }
-                                if (found != null && !recipeConfigMatches(found.export(), recipe))
+                                if (found != null && !recipeConfigMatches(found.export(), recipe, supportClass, allowMissingClass = true))
                                     throw RpcFailure("ConfigurationConflict", "Generated config was modified; will not overwrite")
                             }
                             conflictCheck()
@@ -94,8 +97,10 @@ object AutomationBridge {
                             check(canContinue()) { "Party Editor no longer owns the runner" }
                             conflictCheck()
                             val config = prefs.battleConfigs.firstOrNull { it.id == recipe.configId }
-                                ?: prefs.addBattleConfig(recipe.configId).also { it.import(recipeConfigValues(recipe)) }
-                            check(recipeConfigMatches(config.export(), recipe)) { "Native script read-back disagreed" }
+                                ?: prefs.addBattleConfig(recipe.configId).also { it.import(recipeConfigValues(recipe, supportClass)) }
+                            if (RECIPE_CLASS_KEY !in config.export())
+                                config.import(mapOf(RECIPE_CLASS_KEY to supportClass))
+                            check(recipeConfigMatches(config.export(), recipe, supportClass)) { "Native script read-back disagreed" }
                             progress("verified saved XV and installed matching native script; no battle started")
                         }
                     }) { error ->
@@ -130,13 +135,14 @@ object AutomationBridge {
         }
     }
 
-    private fun recipeConfigValues(plan: CalculatedParty): Map<String, Any> = mapOf(
+    private fun recipeConfigValues(plan: CalculatedParty, supportClass: String): Map<String, Any> = mapOf(
         "autoskill_name" to plan.configName,
         "autoskill_cmd" to plan.skillCommand,
         "autoskill_party" to "14",
         "battle_config_server" to "Jp",
         "auto_choose_target" to false,
         "auto_skill_rearrange_cards" to "F",
+        RECIPE_CLASS_KEY to supportClass,
         "support_mode" to "Preferred",
         "support_fallback" to "Manual",
         "support_friends_only" to true,
@@ -150,8 +156,11 @@ object AutomationBridge {
         mapOf("agent_support_append_unlocked_slots" to plan.supportAppendUnlocked.map(Int::toString).toSet())
     else emptyMap())
 
-    private fun recipeConfigMatches(values: Map<String, *>, plan: CalculatedParty) =
-        recipeConfigValues(plan).all { (k, v) -> values[k] == v } &&
+    private fun recipeConfigMatches(values: Map<String, *>, plan: CalculatedParty, supportClass: String,
+                                    allowMissingClass: Boolean = false) =
+        recipeConfigValues(plan, supportClass).all { (k, v) ->
+            values[k] == v || (allowMissingClass && k == RECIPE_CLASS_KEY && k !in values)
+        } &&
             (plan.supportAppendMax.isNotEmpty() || (values["agent_support_append_max_slots"] as? Set<*>).isNullOrEmpty()) &&
             (plan.supportAppendUnlocked.isNotEmpty() || (values["agent_support_append_unlocked_slots"] as? Set<*>).isNullOrEmpty())
 
@@ -167,6 +176,12 @@ object AutomationBridge {
         if(controller!=null || initializationFailure!=null) return
         try {
             preferences=prefs
+            val store = SupportServantStore.inApp(context.filesDir)
+            for (config in prefs.battleConfigs) {
+                val id = legacySupportId(config.id, config.export()) ?: continue
+                val className = store.servant(id)?.className?.takeIf { it.isNotBlank() } ?: continue
+                config.import(mapOf(RECIPE_CLASS_KEY to recipeSupportClass(className).name))
+            }
             val backend=object:NativeBattleBackend {
                 override fun start(run:RunSnapshot,callback:NativeBattleCallback) {
                     val deadline=SystemClock.elapsedRealtime()+maxOf(0,run.createdAtMillis+run.limits.timeoutSeconds*1000-System.currentTimeMillis())

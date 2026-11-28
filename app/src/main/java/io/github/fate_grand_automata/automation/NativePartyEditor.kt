@@ -190,24 +190,30 @@ class NativePartyEditor @Inject constructor(
 
     /** Multiple independent art patches guard against level, cost, frame and event overlays.
      * Widths are at the existing 720p scale and were checked on the actual JP picker/editor. */
-    private data class ArtPatch(val image: Pattern, val xToCenter: Int) : AutoCloseable {
+    private data class ArtPatch(val image: Pattern, val xToCenter: Int, val top: Int) : AutoCloseable {
         override fun close() = image.close()
     }
     private data class IdArt(
         val formation: List<List<ArtPatch>>,
+        val figures: List<List<ArtPatch>>,
         val servants: List<List<ArtPatch>>,
         val equipment: List<List<ArtPatch>>,
         val banner: List<ArtPatch>,
         val preview: List<ArtPatch>
     ) : AutoCloseable {
         override fun close() =
-            (formation.flatten() + servants.flatten() + equipment.flatten() + banner + preview)
+            (formation.flatten() + figures.flatten() + servants.flatten() + equipment.flatten() + banner + preview)
                 .forEach { it.close() }
     }
     private data class Fraction(val x: Double, val y: Double, val w: Double, val h: Double)
     private val faceWindows = listOf(
         Fraction(.31, .28, .34, .19), Fraction(.28, .45, .32, .18),
         Fraction(.40, .35, .32, .22), Fraction(.26, .20, .47, .13)
+    )
+    // JP formation cards at 720p are 186 px wide. Sample the upper art away from badges.
+    private val figureWidth = 186
+    private val figureWindows = listOf(
+        Fraction(.49, .18, .30, .095), Fraction(.24, .26, .35, .095), Fraction(.32, .36, .32, .085)
     )
     private val bannerWindows = listOf(
         Fraction(.13, .29, .34, .35), Fraction(.48, .30, .34, .39),
@@ -226,25 +232,27 @@ class NativePartyEditor @Inject constructor(
                         val top = (height * y).roundToInt()
                         val bottom = (height * (y + h)).roundToInt()
                         ArtPatch(face.crop(Region(left, top, right - left, bottom - top)),
-                            width / 2 - (left + right) / 2)
+                            width / 2 - (left + right) / 2, top)
                     }
                 }
             }
         }
 
-    private fun loadMember(member: CalculatedMember, faces: Map<Int, List<ByteArray>>,
+    private data class PartyArt(val faces: List<ByteArray>, val figures: List<ByteArray>)
+
+    private fun loadMember(member: CalculatedMember, art: PartyArt,
                            essences: Map<Int, Pair<ByteArray, ByteArray>>): Member {
         val resources = mutableListOf<ArtPatch>()
         fun make(bytes: ByteArray, width: Int, windows: List<Fraction>) =
             patches(bytes, width, windows).also { resources.addAll(it) }
         try {
-            val ownFaces = faces.getValue(member.servantId)
             val equip = member.ce?.let { essences.getValue(it.id) }
             return Member(member.slot - 1, null, emptyList(), null, null, member.ce?.let {
                 if (it.mlb) AgentLimitBreak.Max else AgentLimitBreak.Normal
             }, IdArt(
-                formation = ownFaces.map { make(it, 195, faceWindows) },
-                servants = ownFaces.map { make(it, 118, faceWindows) },
+                formation = art.faces.map { make(it, 195, faceWindows) },
+                figures = art.figures.map { make(it, figureWidth, figureWindows) },
+                servants = art.faces.map { make(it, 118, faceWindows) },
                 equipment = equip?.let { listOf(make(it.first, 118, faceWindows)) }.orEmpty(),
                 banner = equip?.let { make(it.second, 188, bannerWindows) }.orEmpty(),
                 preview = equip?.let { make(it.second, 158, bannerWindows) }.orEmpty()
@@ -300,10 +308,22 @@ class NativePartyEditor @Inject constructor(
         return support
     }
 
-    private fun portraitMatches(f: Pattern, m: Member) =
-        m.idArt?.formation?.any {
+    private fun portraitMatches(f: Pattern, m: Member): Boolean {
+        val art = m.idArt ?: return f.match(requireNotNull(m.portrait),
+            box(centers[m.slot] - 31, 138, 62, 61), .90) != null
+        val center = px(centers[m.slot])
+        val figureMatches = art.figures.any { variant ->
+            variant.count { patch ->
+                val x = center - patch.xToCenter - patch.image.width / 2
+                val y = px(82) + patch.top
+                val region = Region(x - 7, y - 7, patch.image.width + 14, patch.image.height + 14)
+                f.match(patch.image, region, .91) != null
+            } >= 2
+        }
+        return figureMatches || art.formation.any {
             artMatches(f, it, box(centers[m.slot] - 62, 124, 124, 103))
-        } ?: (f.match(requireNotNull(m.portrait), box(centers[m.slot] - 31, 138, 62, 61), .90) != null)
+        }
+    }
 
     private fun rosterMatches(f: Pattern, members: List<Member>, support: Int): Boolean {
         val empty = centers.indices.filter { i -> i != support && members.none { it.slot == i } }
@@ -564,18 +584,24 @@ class NativePartyEditor @Inject constructor(
             } else {
                 val calculated = requireNotNull(plan)
                 report("preflight: resolve calculated servant and Craft Essence IDs")
-                val faces = calculated.members.map { it.servantId }.distinct().associateWith { id ->
+                val partyArt = calculated.members.map { it.servantId }.distinct().associateWith { id ->
                     checkTime()
-                    ServantCatalog.faceUrls(id).mapNotNull { url ->
+                    val urls = ServantCatalog.partyArtUrls(id)
+                    val faces = urls.faces.mapNotNull { url ->
                         checkTime()
                         ServantCatalog.face(url)
                     }.also { require(it.isNotEmpty()) { "No usable portrait for servant $id" } }
+                    val figures = urls.figures.mapNotNull { url ->
+                        checkTime()
+                        ServantCatalog.formationFigure(url)
+                    }
+                    PartyArt(faces, figures)
                 }
                 val essences = calculated.members.mapNotNull { it.ce?.id }.distinct().associateWith { id ->
                     checkTime()
                     ServantCatalog.equipFaces(id)
                 }
-                calculated.members.sortedBy { it.slot }.forEach { members += loadMember(it, faces, essences) }
+                calculated.members.sortedBy { it.slot }.forEach { members += loadMember(it, partyArt.getValue(it.servantId), essences) }
                 calculated.supportSlot - 1
             }
             if (members.count { it.slot < 3 } != 2) fail("Reference needs two owned starters and one support slot")

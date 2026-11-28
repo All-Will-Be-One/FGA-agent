@@ -104,12 +104,20 @@ internal object ServantCatalog {
         return parseFaceUrls(id, getRequired("$ATLAS/nice/JP/servant/$id"))
     }
 
+    data class PartyArtUrls(val faces: List<String>, val figures: List<String>)
+
+    fun partyArtUrls(id: Int): PartyArtUrls {
+        require(id > 0)
+        return parsePartyArtUrls(id, getRequired("$ATLAS/nice/JP/servant/$id"))
+    }
+
     @Serializable
     private data class NiceServant(val id: Int, val extraAssets: ExtraAssets)
 
     @Serializable
     private data class ExtraAssets(
         val faces: Map<String, Map<String, String>>,
+        val narrowFigure: Map<String, Map<String, String>> = emptyMap(),
         val equipFace: Map<String, Map<String, String>> = emptyMap()
     )
 
@@ -129,11 +137,29 @@ internal object ServantCatalog {
     fun parseFaceUrls(id: Int, body: String): List<String> {
         val result = catalogJson.decodeFromString<NiceServant>(body)
         require(result.id == id) { "Atlas returned a different servant" }
-        return result.extraAssets.faces.values.flatMap { it.values }.distinct().onEach {
+        return validatedFaces(result.extraAssets)
+    }
+
+    private fun validatedFaces(assets: ExtraAssets) =
+        assets.faces.values.flatMap { it.values }.distinct().onEach {
             require(isFaceUrl(it)) { "Unexpected Atlas face URL" }
         }.also {
             require(it.isNotEmpty() && it.size <= 96) { "Unexpected number of Atlas faces" }
         }
+
+    fun parsePartyArtUrls(id: Int, body: String): PartyArtUrls {
+        val result = catalogJson.decodeFromString<NiceServant>(body)
+        require(result.id == id) { "Atlas returned a different servant" }
+        val figures = result.extraAssets.narrowFigure.values.flatMap { it.values }.distinct()
+        require(figures.size <= 96 && figures.all { figureUrl.matches(it) }) { "Unexpected Atlas formation art" }
+        return PartyArtUrls(validatedFaces(result.extraAssets), figures)
+    }
+
+    private val figureUrl = Regex("""https://static\.atlasacademy\.io/JP/NarrowFigure/[0-9]+/[A-Za-z0-9_@.-]+\.png""")
+
+    fun formationFigure(url: String): ByteArray? {
+        require(figureUrl.matches(url))
+        return fetchBytes(url, 1024 * 1024)
     }
 
     private fun isFaceUrl(url: String): Boolean = url.matches(

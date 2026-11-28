@@ -67,6 +67,23 @@ class ServantCatalogTest {
     }
 
     @Test
+    fun `party art keeps final ascension and costume figures separate from picker faces`() {
+        val face = "https://static.atlasacademy.io/JP/Faces/f_4030000.png"
+        val first = "https://static.atlasacademy.io/JP/NarrowFigure/403000/403000@0.png"
+        val last = first.replace("403000@0", "403000_2@0")
+        val costume = first.replace("@0", "@10")
+        val body = """{"id":403000,"extraAssets":{"faces":{"ascension":{"1":"$face"}},
+            "narrowFigure":{"ascension":{"1":"$first","2":"$first","4":"$last"},"costume":{"10":"$costume"}}}}"""
+        val art = ServantCatalog.parsePartyArtUrls(403000, body)
+        assertEquals(listOf(face), art.faces)
+        assertEquals(listOf(first, last, costume), art.figures)
+        assertFailsWith<IllegalArgumentException> { ServantCatalog.parsePartyArtUrls(705500, body) }
+        assertFailsWith<IllegalArgumentException> { ServantCatalog.parsePartyArtUrls(403000, body.replace(last, face)) }
+        val legacy = """{"id":403000,"extraAssets":{"faces":{"ascension":{"1":"$face"}}}}"""
+        assertTrue(ServantCatalog.parsePartyArtUrls(403000, legacy).figures.isEmpty())
+    }
+
+    @Test
     fun `reimport renames the display label without changing the selection or touching manual data`() {
         val store = SupportServantStore.inApp(directory)
         val manual = File(directory, "manual.png").apply { writeText("original") }

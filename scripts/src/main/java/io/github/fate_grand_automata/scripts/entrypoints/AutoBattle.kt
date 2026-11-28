@@ -377,15 +377,14 @@ class AutoBattle @Inject constructor(
 
     private fun isRepeatScreen() = findRepeatButton() != null
 
-    private fun repeatQuest() {
+    internal fun repeatQuest() {
+        // Settle the finished run and honor its stop limit before authorizing another sortie.
+        battle.resetState()
         partySelection.requirePartyForRepeat()
         verifiedSupportForBattle = false
         // Needed to show we don't need to enter the "StartQuest" function
         isContinuing = true
         storySkipPossible = false
-
-        // Pressing Continue option after completing a quest, resetting the state as would occur in "Menu" function
-        battle.resetState()
 
         val continueButtonRegion = findRepeatButton()?.region
             ?: return
